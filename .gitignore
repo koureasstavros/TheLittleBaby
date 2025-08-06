@@ -1,0 +1,19 @@
+# Ignore the entire vs directory
+/.vs/
+# Ignore the entire vscode directory
+/.vscode/
+# Ignore the entire models directory
+/models/
+# Ignore the entire backups directory
+/backups/
+# Ignore the entire expirements directory
+/expirements/
+# Ignore the entire improvements directory
+/improvements/
+
+# Ignore the enviroment variables file
+/.env
+# Ignore the last config settings file
+/outputs/last.json
+# Ignore any other GPT Numpy json file
+/GPT Numpy*.ipynb
