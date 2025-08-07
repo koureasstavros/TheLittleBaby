@@ -122,8 +122,13 @@ You can access the pre-trained models on Hugging Face (https://huggingface.co/ko
 1. **Start the Notebook**
    - Open the `.ipynb` file in a Python kernel (e.g. Jupyter, VS Code, Colab).
 
-2. **Select Operation Mode**
-   - Choose one of the following modes:
+2. **Select Path**
+   - Choose the relative path between ipynb and folders:
+      - `same`
+      - `<path>`
+
+3. **Select Plan**
+   - Choose one of the following plan modes:
      - `train`
      - `inference`
      - `extract`
@@ -141,7 +146,7 @@ You can access the pre-trained models on Hugging Face (https://huggingface.co/ko
 
 #### 📦 Extract
 - Requires the **GUID** of the trained model  to find the model_<guid>.
-- Extracts components from the `model_<guid>_all` object file into `model_<guid>` weight file.
+- Extracts components from the `model_<guid>s` object file into `model_<guid>` weight file.
 - A model file and the individual files will be generated with format model_<guid>_<type>
 
 *Keep in mind that if you're running a process in VSCode and your workstation, PC, or laptop enters hibernation, the process will resume automatically once the device is powered back on.
