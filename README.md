@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.0.3
+version: v0.0.4
 ---
 
 # 👶 The Little Baby
@@ -169,25 +169,25 @@ Here come the smartest little settings to help the model learn and grow big and 
 ## 🔍 Report Analysis
 Given the Shakespeare works into a single document of 32777 paragraphs, 12519 sentences, 202651 words, 1075394 characters / tokens for learning and 500 characters / tokens for inference
 
-| n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | inference execution | quality execution | baby's brain |
-|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|---------------|
-| 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 8s | 1/100 | fb546251-ec1c-4e00-a713-765693d8c5cf |
-| 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.5.0s | 37355s | 13s | 1/100 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
-| 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 14s | 1/100 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
-| 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 14s | 1/100 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
-| 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 14s | 1/100 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
-| 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 26s | 25/100 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
-| 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 12s | 12/100 | e64dd257-c048-441b-ad08-47275b22cc0b |
-| 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 23s | 25/100 | 465e5804-17af-412c-8bf6-808a34cdf617 |
-| 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 54s | 27/100 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
-| 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 39s | 27/100 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
+| n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | inference execution | quality execution | model size | baby's brain |
+|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|---------------|
+| 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
+| 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
+| 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
+| 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
+| 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
+| 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
+| 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
+| 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
+| 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
+| 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
 | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | s | s | s | |  |
-| 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 88s | 32/100 | cb632ce3-3f3b-432b-b24f-9171005f205e |
-| 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | 26s | 42/100 | be5bf515-5850-41de-9072-af8faca7d27a |
+| 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
+| 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
 | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | s | s | s | |  |
-| 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 199s | 43/100 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
-| 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 26s | 23/100 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
-| 256 | 64 | 0.1 | 64 | 16 | 2 | 1 | 16 | 1e-3 | 2.00s | 143777s | 25s | 25/100 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
+| 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
+| 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
+| 256 | 64 | 0.1 | 64 | 16 | 2 | 1 | 16 | 1e-3 | 2.00s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 
@@ -213,6 +213,8 @@ Flops are based on 6 (2 ops for forward pass and 4 ops for backward pass), Numbe
 
 ## 🕵️ Observations
 
+When training if n_layers is multiplied then the model size will also multiplied
+
 When inference the model with x max tokens for generation, then
  - if the output type is plain text it will have x tokens
  - if the output type is json it will have y tokens where y >= x, because it might contains special characters for example, new lines, which in json are represented as two characters "\n" --> "\", "n"
@@ -232,28 +234,52 @@ When inference the model with x max tokens for generation, then
 | open | eval | HellaSwag | 30T |
 
 
-**Known Models**
+**Known Architectures**
 
-| Model | Type | Parameters | Training Model Tokens | Training Model Flops | Training Environment | Training Environment Flops /s | Training Content | Training Duration |
-|-----|-----|-----|-----|-----|-----|-----|-----|-----|
-| GPT2 | s | 117M | 3.3B | 2.3e18F | 1-2 x A100 | 100P | WebText (Reddit outbound links with ≥3 karma; ~40GB of filtered internet text) | 60D |
-| GPT2 | m | 335M | 3.3B | 7e18F | 4-8 × A100 | 200P | Same as Small; byte-level BPE tokenization, 50,257 vocab size | 60Days |
-| GPT2 | l | 774B | 3.3B | 15e18F | 8-16 × V100 | 400P | Same as Small; trained with causal LM objective | 60Days |
-| GPT3 | s | 125M | 300B | 2.25e21F | 1-2 × A100 | 100P | Common Crawl (filtered), WebText2, Books1/2, Wikipedia (~570GB filtered) | 180D |
-| GPT3 | m | 350M | 300B | 6.3e21F | 8-16 × A100 | 200P | Same as Small; scaled architecture with 24 layers and 16 attention heads | 180D |
-| GPT3 | l | 760M | 300B | 3.7e21F | 100-200 × A100 | 400P | Same as Small; deeper model with wider layers and more attention heads | 180D |
-| GPT4 | s | 1B | 6B | 1.8e21F | 100-200 × A100 | 1OOP | Filtered Common Crawl, Books, Wikipedia, WebText2, code, academic papers | 160D |
-| GPT4 | m | 13B | 1.7T | 9.4e23F | 400-600 × A100 | 400P | Same as Small; with broader multilingual and multimodal data | 160D |
-| GPT4 | l | 65B | 13T | 3e25F | 2k-4K × A100 | 1E | Massive curated dataset: text, code, images, audio (for GPT-4o), RLHF tuning | 90D  |
-| LLAMA2 | s | 7B | 2T | 1.5e24F | 32-64 × A100 | 400P | Publicly available web data (filtered), books, code, academic papers | 180D |
-| LLAMA2 | m | 13B | 2T | 2.6e24F | 128-256 × A100 | 400P | Same as Small; with additional curated datasets for scaling | 180D |
-| LLAMA2 | l | 70B | 2T | 14e24F | 1024K+ x A100 | 800P | Same as Small; plus enhanced filtering, grouped-query attention optimization | 180D |
-| LLAMA3 | s | 8B | 15T | 7.2e24F | 64-128 x A100 | 700P | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA3 | m | 70B | 15T | 63e24F | 512-1024 x A100 | 800P | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA3 | l | 405B | 15T | 365e24F | 1024+ x A100 | 1E | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA4 | s | 109B total / 17B active | ~30T | ~8e25F | 32-64 x H100 |	~400T |	Text, image, video (multimodal) |	Unknown |
-| LLAMA4 | m | 400B total / 17B active | ~30T | ~38e25F | 128-256 × H100 | ~3200T | Text, image, code, multilingual data | Unknown |
-| LLAMA4 | l | ~2T total / 288B active | ~30T | ~100e25F | 32K+ x H100 | Unknown | STEM-heavy, multimodal, synthetic distill. | Still training |
+| Model | Type | Parameters | Input Tokens | Output Tokens | Training Model Tokens | Training Model Flops | Training Environment | Training Environment Flops /s | Training Content | Training Duration |
+|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| GPT2 | s | 117M | 1024 | Shared | 3.3B | 2.3e18F | 1-2 x A100 | 100P | WebText (Reddit outbound links with ≥3 karma; ~40GB of filtered internet text) | 60D |
+| GPT2 | m | 335M | 1024 | Shared | 3.3B | 7e18F | 4-8 × A100 | 200P | Same as Small; byte-level BPE tokenization, 50,257 vocab size | 60D |
+| GPT2 | l | 774B | 1024 | Shared | 3.3B | 15e18F | 8-16 × V100 | 400P | Same as Small; trained with causal LM objective | 60D |
+| GPT2 | xl | 1.5B | 1024 | Shared | 3.3B | ~30e18F | 16-32 × V100 | 800P | Same as Small;  trained with causal LM objective | 60D |
+| GPT3 | s | 125M | 2048 | Shared | 300B | 2.25e21F | 1-2 × A100 | 100P | Common Crawl (filtered), WebText2, Books1/2, Wikipedia (~570GB filtered) | 180D |
+| GPT3 | m | 350M | 4096 | Shared | 300B | 6.3e21F | 8-16 × A100 | 200P | Same as Small; scaled architecture with 24 layers and 16 attention heads | 180D |
+| GPT3 | l | 760M | 16384 | 4096 | 300B | 3.7e21F | 100-200 × A100 | 400P | Same as Small; deeper model with wider layers and more attention heads | 180D |
+| GPT3 | xl | 6.7B | 2048 | Shared | 300B | ~1.2e22F | 32-64 × A100 | 800P | Common Crawl, WebText2, Books1/2, Wikipedia (~570GB filtered) | 180D |
+| GPT4 | s | 1B | 8192 | 8192 | 6B | 1.8e21F | 100-200 × A100 | 1OOP | Filtered Common Crawl, Books, Wikipedia, WebText2, code, academic papers | 160D |
+| GPT4 | m | 13B | 32768 | 8192 | 1.7T | 9.4e23F | 400-600 × A100 | 400P | Same as Small; with broader multilingual and multimodal data | 160D |
+| GPT4 | l | 65B | 128000 | 4096 | 13T | 3e25F | 2k-4K × A100 | 1E | Massive curated dataset: text, code, images, audio (for GPT-4o), RLHF tuning | 90D  |
+| LLAMA2 | s | 7B | 4096 | Shared | 2T | 1.5e24F | 32-64 × A100 | 400P | Publicly available web data (filtered), books, code, academic papers | 180D |
+| LLAMA2 | m | 13B | 4096 | Shared | 2T | 2.6e24F | 128-256 × A100 | 400P | Same as Small; with additional curated datasets for scaling | 180D |
+| LLAMA2 | l | 70B | 4096 | Shared | 2T | 14e24F | 1024K+ x A100 | 800P | Same as Small; plus enhanced filtering, grouped-query attention optimization | 180D |
+| LLAMA3 | s | 8B | 8000 | Shared | 15T | 7.2e24F | 64-128 x A100 | 700P | Books, Wikipedia, GitHub, StackExchange | 70D |
+| LLAMA3 | m | 70B | 128000 | Shared | 15T | 63e24F | 512-1024 x A100 | 800P | Books, Wikipedia, GitHub, StackExchange | 70D |
+| LLAMA3 | l | 405B | 128000 | Shared | 15T | 365e24F | 1024+ x A100 | 1E | Books, Wikipedia, GitHub, StackExchange | 70D |
+| LLAMA4 Scout | s | 109B total / 17B active | 10000000 | Shared | ~30T | ~8e25F | 32-64 x H100 |	~400T |	Text, image, video (multimodal) |	Unknown |
+| LLAMA4 Maverick | m | 400B total / 17B active | 10000000 | Shared | ~30T | ~38e25F | 128-256 × H100 | ~3200T | Text, image, code, multilingual data | Unknown |
+| LLAMA4 Maverick | l | 2T total / 288B active | 10000000 | Shared | ~30T | ~100e25F | 32K+ x H100 | Unknown | STEM-heavy, multimodal, synthetic distill. | Unknown |
+| GPT-4o-nano | s | — | 128000 | 4096 | — | — | — | — | — | — |
+| GPT-4o-mini | m | — | 128000 | 16096 | — | — | — | — | — | — |
+| GPT-4o | l | — | 128000 | 4096 | — | — | — | — | — | — |
+| GPT-4.1-nano | s | — | 1000000 | 32768 | — | — | — | — | — | — |
+| GPT-4.1-mini | m | — | 1000000 | 32768 | — | — | — | — | — | — |
+| GPT-4.1 | l | — | 1000000 | 32768  | — | — | — | — | — | — |
+| o1-mini | m | — | 200000 | 100000 | — | — | — | — | — | — |
+| o1 | l | — | 200000 | 100000 | — | — | — | — | — | — |
+| o3-mini | s | — | 200000 | 100000 | — | — | — | — | — | — |
+| o3 | m | — | 20000 0| 100000 | — | — | — | — | — | — |
+| o3-pro | l | — | 200000 | 100000 | — | — | — | — | — | — |
+| o4-mini | s | — | 200000 | 100000 | — | — | — | — | — | — |
+| o4 | m | — | 200000 | 100000 | — | — | — | — | — | — |
+| o4-pro | l | — | 200000 | 100000 | — | — | — | — | — | — |
+| Grok-3 | — | — | 131072 | 16384 | — | — | — | — | — | — |
+| Gemini 2.0 | — | — | 1048576| 8192 | — | — | — | — | — | — |
+| Gemini 2.0 Flash | — | — | 1048576 | 8192 | — | — | — | — | — | — |
+| Gemini 2.5 | — | — | 1048576 | 65535 | — | — | — | — | — | — |
+| Gemini 2.5 Pro | — | — | 1048576 | 65535 | — | — | — | — | — | — |
+| Claude Sonnet 3.5 | — | — | 200000 | 4096 | — | — | — | — | — | — |
+| Claude Sonnet 3.7 | — | — | 200000 | 8192 | — | — | — | — | — | — |
+| Claude Sonnet 4 | — | — | 200000 | 64000 | — | — | — | — | — | — |
 
 *Do not try to relate Training Model Flops, Training Environment Training Environment Flops, Training Duration as there are other factors which are playing role, like: number of epochs, number of precision parallel efficiency, memory bandwidth, thermal limitations, etc.
 
