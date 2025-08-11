@@ -9,3 +9,6 @@
 
 - Version v0.0.6
   - Switched model file extension from weights to json
+
+- Version v0.0.7
+  - Fixed epoch and batch report prints
