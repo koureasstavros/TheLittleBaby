@@ -6,3 +6,6 @@
   - Added finetune option into the workflow
   - Added cache into inference process (kv_cache)
   - Removed some python loops to increase cores used
+
+- Version v0.0.6
+  - Switched model file extension from weights to json
