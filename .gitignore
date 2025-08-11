@@ -4,6 +4,8 @@
 /.vscode/
 # Ignore the entire models directory
 /models/
+# Ignore the entire tokenizers directory
+/tokenizers/
 # Ignore the entire backups directory
 /backups/
 # Ignore the entire expirements directory
