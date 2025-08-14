@@ -2,6 +2,8 @@
 /.vs/
 # Ignore the entire vscode directory
 /.vscode/
+# Ignore the entire configs directory
+/configs/
 # Ignore the entire models directory
 /models/
 # Ignore the entire tokenizers directory
@@ -15,7 +17,5 @@
 
 # Ignore the enviroment variables file
 /.env
-# Ignore the last config settings file
-/outputs/last.json
 # Ignore any other GPT Numpy json file
 /GPT Numpy*.ipynb

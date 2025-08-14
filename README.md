@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.0.7
+version: v0.0.8
 ---
 
 # 👶 The Little Baby
@@ -121,8 +121,9 @@ To get started with this project, clone the code, download the tokenizers abd pr
 
 **Get objects**
   - You can access the code on GitHub (https://github.com/koureasstavros/TheLittleBaby), simply clone the repository.
-  - You can access the pre-trained tokenizers and models on Hugging Face (https://huggingface.co/koureasstavros/TheLittleBaby), simply download the tokenizer and model files. In case you have low speed internet connection check the analysis table select a guid and pick a specific guid for tokenizer and model. The tokenizer and model files are needed only if you are going to perform finetune or inference without training your own.
+  - You can access the pre-trained tokenizers and models on Hugging Face (https://huggingface.co/koureasstavros/TheLittleBaby), simply download the config, tokenizer and model files. In case you have low speed internet connection check the analysis table select a guid and pick a specific guid for config, tokenizer and model. The config, tokenizer and model files are needed only if you are going to perform finetune or inference without training your own.
   - Then, you should:
+    - place the config file or config files into the configs folder.
     - place the tokenizer file or tokenizer files into the tokenizers folder.
     - place the model file or model files into the models folder.
 
@@ -149,16 +150,17 @@ In Baby's world, each option has its own little job—and below, you’ll discov
 
 #### 🔧 Train
 - Begins training using parameters defined in earlier Python blocks.
-- A model file containing the weights will be generated with format `model_<guid>`.
+- A config file containing the settings will be generated with format `config_<guid>`.
 - A tokenizer file containing the vocabilary will be generated with format `tokenizer_<guid>`.
+- A model file containing the weights and biases will be generated with format `model_<guid>`.
 - A report file containing the training analysis will be generated with format `report_<guid>`.
 - A completion file containing the generation will be generated with format `complation_<guid>` using an empty prompt.
 
 #### 🛠️ Finetune
 - Begins finetuning using a **base model** and a **custom training dataset**.
-- Requires the **GUID** of the base model to locate `model_<guid>`.
-- A model file containing the weights will be generated with format `model_<guid>_finetuned`.
+- Requires the **GUID** of the base to locate `config_<guid>`, `tokenizer_<guid>` and `model_<guid>`.
 - A tokenizer file containing the vocabilary will be generated with format `tokenizer_<guid>_fineuned`.
+- A model file containing the weights and biases will be generated with format `model_<guid>_finetuned`.
 - A report file containing the training analysis will be generated with format `report_<guid>_fineuned`.
 - A completion file containing the generation will be generated with format `completion_<guid>_finetuned` using an empty prompt.
 
@@ -187,6 +189,27 @@ Here come the smartest little settings to help the model learn and grow big and 
 ## ⚙️ Parameters
 
 These hyperparameters collectively define the training process, where a model's architecture—specified by its depth (n_layers), width (n_emb), attention span (n_ctx), and attention mechanism (n_heads, head_size)—is optimized over a set number of num_epochs using a specific batch_size and learning rate (lr), with dropout applied to improve generalization.
+
+- **c_sequence**
+
+  - What it is: Strategy for constructing block sequences.
+  - Size: No direct impact on parameter count.
+  - Speed: No direct impact on performance.
+  - Quality: Proper sequence construction affects how well long dependencies are exposed. Future variants could improve learning efficiency on heterogeneous corpora.
+
+- **c_attention**
+
+  - What it is: Chosen attention mechanism implementation.
+  - Size: Attention choice impacts model size. 
+  - Speed: Attention choice impacts model speed.
+  - Quality: Attention choice influences how diverse relational patterns are captured.
+
+- **c_network**
+
+  - What it is: Chosen network mechanism implementation.
+  - Size: Network choice impacts model size. 
+  - Speed: Network choice impacts model speed.
+  - Quality: Network choice impacts representational richness and efficiency.
 
 - **n_ctx**
 
@@ -273,29 +296,37 @@ Even our little language models have their favorite rules to follow—turns out,
   Flops are based on 6 (2 ops for forward pass and 4 ops for backward pass), Number of Tokens (T), Number of Parameters (P).
 
 
+## 🏛️ Architecture
+
+A language model architecture is a neural network design—often based on transformers—that processes and generates human-like text by learning patterns from large-scale language data.
+
+![Architecture Diagram](material/LittleBaby.drawio.svg)
+
+
 ## 🔍 Report Analysis
 Given the Shakespeare works into a single document of 32777 paragraphs, 12519 sentences, 202651 words, 1075394 characters / tokens for learning and 500 characters / tokens for inference
 
-| version | n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | train_execution | inference execution | quality execution | model size | baby's brain |
-|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
-| v0.0.1 | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
-| v0.0.1 | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
-| v0.0.1 | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
-| v0.0.1 | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
-| v0.0.1 | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
-| v0.0.1 | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
-| v0.0.1 | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
-| v0.0.1 | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
-| v0.0.1 | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
-| v0.0.1 | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
-| v0.0.1 | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
-| v0.0.1 | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
-| v0.0.1 | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
-| v0.0.1 | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | s | s | s | s |  |  |  |
-| v0.0.1 | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 763757s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
-| v0.0.1 | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
-| v0.0.1 | 256 | 64 | 0.1 | 64 | 16 | 2 | 1 | 16 | 1e-3 | 2.00s | 143777s| 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
-| v0.0.1 | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 9s | 27/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
+| version | dataset | c_sequence | c_attention | c_network | n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | train_execution | inference execution | quality execution | model size | baby's brain |
+|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
+| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
+| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
+| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
+| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
+| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
+| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | pre | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
+| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | s | s | s | s |  |  |  |
+| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 763757s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
+| v0.0.1 | shakespeare | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
+| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 9s | 27/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
+| v0.0.1 | shakespeare | pre | moh | moe | 32 | 32 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 9s | 25/100 | 7,367,190 | 7a1459eb-5876-4c20-b56a-34a779066ae0 |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 
@@ -304,13 +335,14 @@ Given the Shakespeare works into a single document of 32777 paragraphs, 12519 se
 
 While playing and exploring with our tiny language models, we noticed a few adorable quirks and clever behaviors—here are some of the sweet observations we made along the way.
 
-- When training if head_size is multiplied then the model size will also multiplied and total time are also multiplied
-- When training if n_layers is multiplied then the model size will also multiplied and total time are also multiplied
-- When training if vocab_size is multiplied then the model size will also multiplied and total time are also multiplied
-- When inference if cache is true then generation O(T²) faster as previously sequences do not need to be recalculated each time
-- When inference the model with x max tokens for generation, then
-  - if the output type is plain text it will have x tokens
-  - if the output type is json it will have y tokens where y >= x, because it might contains special characters for example, new lines, which in json are represented as two characters "\n" --> "\", "n"
+- When training if **n_emb** is increased then the model size will also increased and total time are also increased, this follows linear analogy as any array width has size of embedding size.
+- When training if **head_size** is increased then the model size will also increased and total time are also increased, there are only gamma and beta arrays into the formulas.
+- When training if **n_layers** is increased then the model size will also increased and total time are also increased, depending on attention selection and network selection they will follow different formula. 
+- When training if **vocab_size** is increased then the tokenizer size will also increased and total time are also increased, this follows linear analogy as any array length has size of vocabilary size.
+- When inference if **infr_cache** is true then generation O(T²) faster as previously sequences do not need to be recalculated each time.
+- When inference the model with x **max_tokens** for generation, then:
+  - if the output type is plain text it will have x tokens.
+  - if the output type is json it will have y tokens where y >= x, because it might contains special characters for example, new lines, which in json are represented as two characters "\n" --> "\", "n".
 
 
 ## Further Thoughts
@@ -399,7 +431,15 @@ While playing and exploring with our tiny language models, we noticed a few ador
 
 **Head** – A sub-unit inside an attention layer. Each head focuses on different aspects of the input (e.g., grammar, relationships, facts).
 
-**Multi-Head Attention** – Uses multiple heads in parallel to capture diverse patterns in the data4.
+**Multi Head Attention (MHA)** – is a core component of Transformer architectures which allows the model to attend to different parts of the input sequence in parallel, using multiple attention "heads."
+
+**Grouped Query Attention (GQA)** – it groups multiple heads to share the same key and value projections.
+
+**Multi-Head Latent Attention (MLA)** – it compresses the key and value tensors into a lower-dimensional space before storing them in the KV cache.
+
+**Mixture-of-Experts (MoE)** – is a modular architecture where different "expert" subnetworks are selectively activated per input token, often used to scale models efficiently.
+
+**Mixture Head Attention (MoH)** – is reimagined as an MoE system, where heads = experts while replaces the standard summation of heads with a weighted, token-specific selection.
 
 🔁 **Training Process**
 

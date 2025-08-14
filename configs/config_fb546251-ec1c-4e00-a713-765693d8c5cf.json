@@ -1,4 +1,7 @@
 {
+	"c_sequence": "pre",
+    "c_attention": "mha",
+    "c_network": "mlp",
     "n_ctx": 8,
     "n_emb": 128,
     "dropout": 0.1,

@@ -12,3 +12,17 @@
 
 - Version v0.0.7
   - Fixed epoch and batch report prints
+
+- Version v0.0.8
+  - Added debug option
+  - Added architecture diagram
+  - Added inference cache (kv)
+  - Added c_sequence config to choose between pre and post
+  - Added Post Norm sequence into the Block
+  - Added c_attention config to choose between mha and moh
+  - Added Multi Head Mixture Attention (moh)
+  - Added model load / save for Multi Head Mixture Attention (moh)
+  - Added c_network config to choose between mlp and moe
+  - Added Mixture of Experts (moe)
+  - Added model load / save for Mixture of Experts (moe)
+  - Aligned naming conventions for common attributes
