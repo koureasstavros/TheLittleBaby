@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.0.8
+version: v0.0.9
 ---
 
 # 👶 The Little Baby

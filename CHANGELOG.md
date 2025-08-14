@@ -26,3 +26,6 @@
   - Added Mixture of Experts (moe)
   - Added model load / save for Mixture of Experts (moe)
   - Aligned naming conventions for common attributes
+
+- Version v0.0.9
+  - Moved config files into Hugging Face Repo
