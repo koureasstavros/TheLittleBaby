@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.0.9
+version: v0.0.10
 ---
 
 # 👶 The Little Baby
@@ -321,7 +321,7 @@ Given the Shakespeare works into a single document of 32777 paragraphs, 12519 se
 | v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
 | v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
 | v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | pre | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
-| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | s | s | s | s |  |  |  |
+| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 6.0s | 372273s | 372273s | 88s | 37/100 | 56,051,017 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
 | v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 763757s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
 | v0.0.1 | shakespeare | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
 | v0.0.1 | shakespeare | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |

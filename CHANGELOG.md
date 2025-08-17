@@ -29,3 +29,6 @@
 
 - Version v0.0.9
   - Moved config files into Hugging Face Repo
+
+- Version v0.0.10
+  - Added expirement
