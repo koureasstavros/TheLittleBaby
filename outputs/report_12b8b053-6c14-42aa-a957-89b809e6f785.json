@@ -4,8 +4,9 @@
     "val_batches_per_epoch": 6964,
     "average_train_loss_per_epoch": 1.1033870081378203,
     "average_val_loss_per_epoch": 1.694168667893517,
-    "average_time_per_epoch": 763757.0099334717,
-    "total_time": 763757.0099334717,
+    "average_time_per_epoch": 737839.0099334717,
+    "total_time": 737839.0099334717,
+    "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/62733 | train_loss = 4.2099 | execution_time = 11.2861",
         "Epoch 1/1 | Batch 2/62733 | train_loss = 3.8998 | execution_time = 10.4663",
@@ -53736,7 +53737,7 @@
         "Epoch 1/1 | Batch 53727/62733 | train_loss = 1.0119 | execution_time = 13.6940",
         "Epoch 1/1 | Batch 53728/62733 | train_loss = 0.9674 | execution_time = 13.2326",
         "Epoch 1/1 | Batch 53729/62733 | train_loss = 0.9501 | execution_time = 11.9020",
-        "Epoch 1/1 | Batch 53730/62733 | train_loss = 0.9284 | execution_time = 939.6072",
+        "Epoch 1/1 | Batch 53730/62733 | train_loss = 0.9284 | execution_time = 9.6072",
         "Epoch 1/1 | Batch 53731/62733 | train_loss = 0.8750 | execution_time = 14.6641",
         "Epoch 1/1 | Batch 53732/62733 | train_loss = 0.9292 | execution_time = 15.8872",
         "Epoch 1/1 | Batch 53733/62733 | train_loss = 0.9783 | execution_time = 12.5576",
@@ -69706,6 +69707,6 @@
         "Epoch 1/1 | Batch 6964/6964 | val_loss = 1.9637 | execution_time = 3.3134"
     ],
     "epoch_logs": [
-        "Epoch  1/1 | train_loss = 1.1034 | val_loss = 1.6942 | execution_time = 738769.0099"
+        "Epoch  1/1 | train_loss = 1.1034 | val_loss = 1.6942 | execution_time = 737839.0099"
     ]
 }

@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.0.10
+version: v0.1.0
 ---
 
 # 👶 The Little Baby
@@ -14,7 +14,7 @@ version: v0.0.10
 
 ## 🧠 Description
 
-**The Little Baby** is a minimalist language model (LLM) crafted entirely in **pure Python using just Numpy**. It requires no external packages, libraries, or frameworks to function. Both **training** and **inference** are achieved through low-level operations and hand-built logic — making this project ideal for educational deep dives and experimental tinkering.
+**The Little Baby** is a minimalist language model (LLM) crafted entirely in **pure Python using just Numpy / CuPy**. It requires no external packages, libraries, or frameworks to function. Both **training** and **inference** are achieved through low-level operations and hand-built logic — making this project ideal for educational deep dives and experimental tinkering.
 
 This repository is designed to reveal the **inner mechanics** of a GPT-style transformer model and demystify the "magic" behind modern language models through readable and hackable code.
 
@@ -129,6 +129,7 @@ To get started with this project, clone the code, download the tokenizers abd pr
 
 **Start the Notebook**
    - Open the `.ipynb` file in a Python kernel (e.g. Jupyter, VS Code, Colab).
+     - Run all cells in the notebook
 
 **Select Path**
    - Choose the relative path between ipynb and folders:
@@ -189,6 +190,13 @@ Here come the smartest little settings to help the model learn and grow big and 
 ## ⚙️ Parameters
 
 These hyperparameters collectively define the training process, where a model's architecture—specified by its depth (n_layers), width (n_emb), attention span (n_ctx), and attention mechanism (n_heads, head_size)—is optimized over a set number of num_epochs using a specific batch_size and learning rate (lr), with dropout applied to improve generalization.
+
+- **c_tokenizer**
+
+  - What it is: Strategy for tokenizing sequences.
+  - Size: While it doesn’t directly affect parameter count, it does influence model size due to differences in vocabulary structure.
+  - Speed: While it doesn’t directly affect parameter count, it does influence model speed due to differences in vocabulary structure.
+  - Quality: When texts contain errors, it can negatively affect training and inference quality.
 
 - **c_sequence**
 
@@ -302,31 +310,51 @@ A language model architecture is a neural network design—often based on transf
 
 ![Architecture Diagram](material/LittleBaby.drawio.svg)
 
+### 🔍 Attention Variants Complexity Table
+
+| Variant | Uses Q/K/V? | Complexity | Notes |
+|--------|--------------|------------|-------|
+| **MHA** (Multi-Head Attention) | ✅ Separate Q, K, V per head | **O(N²)** | Standard Transformer attention; expensive for long sequences |
+| **MOH** (Multi-Output Head) | ✅ Typically uses Q/K/V | **O(N²)** | Less common; focuses on output diversity rather than input projection |
+| **GQA** (Grouped-Query Attention) | ✅ Shared K/V per group of Q heads | **O(N²)** (less compute than MHA) | Trade-off between performance and efficiency; used in GPT-4 |
+| **MQA** (Multi-Query Attention) | ✅ Shared K/V across all heads | **O(N²)** (but lower memory) | Reduces memory by sharing K/V; used in LLaMA and PaLM |
+| **AFT** (Attention-Free Transformer) | ❌ No K/V; uses learned positional bias | **O(N)** | Removes attention entirely; uses element-wise operations and bias terms |
+
+### 🔍 Network Variants Complexity Table
+
+| Variant | Complexity | Notes |
+|--------|------------|-------|
+| **MLP** (Multilayer Perceptron) | **O(N × D²)** | Dense feedforward layer; all inputs pass through the same network |
+| **MoE** (Mixture of Experts) | **O(K × D²)** (K ≪ N) | Sparse routing to K of N experts; improves parameter-to-compute ratio and scalability |
+
 
 ## 🔍 Report Analysis
+
 Given the Shakespeare works into a single document of 32777 paragraphs, 12519 sentences, 202651 words, 1075394 characters / tokens for learning and 500 characters / tokens for inference
 
-| version | dataset | c_sequence | c_attention | c_network | n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | train_execution | inference execution | quality execution | model size | baby's brain |
-|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
-| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
-| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
-| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
-| v0.0.1 | shakespeare | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
-| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
-| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | pre | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
-| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 6.0s | 372273s | 372273s | 88s | 37/100 | 56,051,017 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 763757s | 763757s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
-| v0.0.1 | shakespeare | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
-| v0.0.1 | shakespeare | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 9s | 27/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
-| v0.0.1 | shakespeare | pre | moh | moe | 32 | 32 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 9s | 25/100 | 7,367,190 | 7a1459eb-5876-4c20-b56a-34a779066ae0 |
+| version | device | dataset | c_tokenizer | c_sequence | c_attention | c_network | n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | train_execution | inference execution | quality execution | model size | baby's brain |
+|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | pre | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 6.0s | 372273s | 372273s | 88s | 37/100 | 56,051,017 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 737839s | 737839s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 2 | 4 | 16 | 1e-3 | 0.30s | 30071s | 120286s | 5s | 38/100 | 3,884,379 | fda4ed80-b633-4e6e-a4a7-894a76528bd3 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 54558s | 218235s | 9s | 27/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
+| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 32 | 32 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 4s | 25/100 | 6,730,419 | 7a1459eb-5876-4c20-b56a-34a779066ae0 |
+| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 64 | 64 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 1.20s | 142492s | 142492s | 48s | 30/100 | 22,531,002 | 3ceb67f2-0363-439c-9f1a-69a90bf7fa48 |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 
@@ -343,156 +371,3 @@ While playing and exploring with our tiny language models, we noticed a few ador
 - When inference the model with x **max_tokens** for generation, then:
   - if the output type is plain text it will have x tokens.
   - if the output type is json it will have y tokens where y >= x, because it might contains special characters for example, new lines, which in json are represented as two characters "\n" --> "\", "n".
-
-
-## Further Thoughts
-
-🧠 "Let’s imagine what shiny new toys and big upgrades the little model needs to turn into a grown-up LLM who knows all about the big wide world!
-
- **Known DataSets**
-
-| DataSet Type | DataSet Type | DataSet Name | DataSet Tokens |
-|-----|-----|-----|-----|
-| open | train | SlimPajama | 627B |
-| open | train | RedPajama v1 | 1T |
-| open | train | RedPajama v2 | 30T |
-| open | eval | HellaSwag | 30T |
-
-
-**Known Architectures**
-
-| Model | Type | Parameters | Input Tokens | Output Tokens | Training Model Tokens | Training Model Flops | Training Environment | Training Environment Flops /s | Training Content | Training Duration |
-|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
-| GPT2 | s | 117M | 1024 | Shared | 3.3B | 2.3e18F | 1-2 x A100 | 100P | WebText (Reddit outbound links with ≥3 karma; ~40GB of filtered internet text) | 60D |
-| GPT2 | m | 335M | 1024 | Shared | 3.3B | 7e18F | 4-8 × A100 | 200P | Same as Small; byte-level BPE tokenization, 50,257 vocab size | 60D |
-| GPT2 | l | 774B | 1024 | Shared | 3.3B | 15e18F | 8-16 × V100 | 400P | Same as Small; trained with causal LM objective | 60D |
-| GPT2 | xl | 1.5B | 1024 | Shared | 3.3B | ~30e18F | 16-32 × V100 | 800P | Same as Small;  trained with causal LM objective | 60D |
-| GPT3 | s | 125M | 2048 | Shared | 300B | 2.25e21F | 1-2 × A100 | 100P | Common Crawl (filtered), WebText2, Books1/2, Wikipedia (~570GB filtered) | 180D |
-| GPT3 | m | 350M | 4096 | Shared | 300B | 6.3e21F | 8-16 × A100 | 200P | Same as Small; scaled architecture with 24 layers and 16 attention heads | 180D |
-| GPT3 | l | 760M | 16384 | 4096 | 300B | 3.7e21F | 100-200 × A100 | 400P | Same as Small; deeper model with wider layers and more attention heads | 180D |
-| GPT3 | xl | 6.7B | 2048 | Shared | 300B | ~1.2e22F | 32-64 × A100 | 800P | Common Crawl, WebText2, Books1/2, Wikipedia (~570GB filtered) | 180D |
-| GPT4 | s | 1B | 8192 | 8192 | 6B | 1.8e21F | 100-200 × A100 | 1OOP | Filtered Common Crawl, Books, Wikipedia, WebText2, code, academic papers | 160D |
-| GPT4 | m | 13B | 32768 | 8192 | 1.7T | 9.4e23F | 400-600 × A100 | 400P | Same as Small; with broader multilingual and multimodal data | 160D |
-| GPT4 | l | 65B | 128000 | 4096 | 13T | 3e25F | 2k-4K × A100 | 1E | Massive curated dataset: text, code, images, audio (for GPT-4o), RLHF tuning | 90D  |
-| LLAMA2 | s | 7B | 4096 | Shared | 2T | 1.5e24F | 32-64 × A100 | 400P | Publicly available web data (filtered), books, code, academic papers | 180D |
-| LLAMA2 | m | 13B | 4096 | Shared | 2T | 2.6e24F | 128-256 × A100 | 400P | Same as Small; with additional curated datasets for scaling | 180D |
-| LLAMA2 | l | 70B | 4096 | Shared | 2T | 14e24F | 1024K+ x A100 | 800P | Same as Small; plus enhanced filtering, grouped-query attention optimization | 180D |
-| LLAMA3 | s | 8B | 8000 | Shared | 15T | 7.2e24F | 64-128 x A100 | 700P | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA3 | m | 70B | 128000 | Shared | 15T | 63e24F | 512-1024 x A100 | 800P | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA3 | l | 405B | 128000 | Shared | 15T | 365e24F | 1024+ x A100 | 1E | Books, Wikipedia, GitHub, StackExchange | 70D |
-| LLAMA4 Scout | s | 109B total / 17B active | 10000000 | Shared | ~30T | ~8e25F | 32-64 x H100 |	~400T |	Text, image, video (multimodal) |	Unknown |
-| LLAMA4 Maverick | m | 400B total / 17B active | 10000000 | Shared | ~30T | ~38e25F | 128-256 × H100 | ~3200T | Text, image, code, multilingual data | Unknown |
-| LLAMA4 Maverick | l | 2T total / 288B active | 10000000 | Shared | ~30T | ~100e25F | 32K+ x H100 | Unknown | STEM-heavy, multimodal, synthetic distill. | Unknown |
-| GPT-4o-nano | s | — | 128000 | 4096 | — | — | — | — | — | — |
-| GPT-4o-mini | m | — | 128000 | 16096 | — | — | — | — | — | — |
-| GPT-4o | l | — | 128000 | 4096 | — | — | — | — | — | — |
-| GPT-4.1-nano | s | — | 1000000 | 32768 | — | — | — | — | — | — |
-| GPT-4.1-mini | m | — | 1000000 | 32768 | — | — | — | — | — | — |
-| GPT-4.1 | l | — | 1000000 | 32768  | — | — | — | — | — | — |
-| o1-mini | m | — | 200000 | 100000 | — | — | — | — | — | — |
-| o1 | l | — | 200000 | 100000 | — | — | — | — | — | — |
-| o3-mini | s | — | 200000 | 100000 | — | — | — | — | — | — |
-| o3 | m | — | 20000 0| 100000 | — | — | — | — | — | — |
-| o3-pro | l | — | 200000 | 100000 | — | — | — | — | — | — |
-| o4-mini | s | — | 200000 | 100000 | — | — | — | — | — | — |
-| o4 | m | — | 200000 | 100000 | — | — | — | — | — | — |
-| o4-pro | l | — | 200000 | 100000 | — | — | — | — | — | — |
-| Grok-3 | — | — | 131072 | 16384 | — | — | — | — | — | — |
-| Gemini 2.0 | — | — | 1048576| 8192 | — | — | — | — | — | — |
-| Gemini 2.0 Flash | — | — | 1048576 | 8192 | — | — | — | — | — | — |
-| Gemini 2.5 | — | — | 1048576 | 65535 | — | — | — | — | — | — |
-| Gemini 2.5 Pro | — | — | 1048576 | 65535 | — | — | — | — | — | — |
-| Claude Sonnet 3.5 | — | — | 200000 | 4096 | — | — | — | — | — | — |
-| Claude Sonnet 3.7 | — | — | 200000 | 8192 | — | — | — | — | — | — |
-| Claude Sonnet 4 | — | — | 200000 | 64000 | — | — | — | — | — | — |
-
-*Do not try to relate Training Model Flops, Training Environment Training Environment Flops, Training Duration as there are other factors which are playing role, like: number of epochs, number of precision parallel efficiency, memory bandwidth, thermal limitations, etc.
-
-
-## 📖 Terminology
-
-🧠 **Core Concepts**
-
-**Transformer** – The backbone of most LLMs. It processes input all at once (not word-by-word) using a technique called self-attention, which helps the model understand relationships between words.
-
-**Parameters** – The internal settings (weights) that the model learns during training. More parameters equaks more learning capacity.
-
-**Embedding** – A way to turn words into numbers. These numbers (vectors) capture meaning, so similar words have similar embeddings.
-
-🧮 **Model Architecture**
-
-**Layer** – A building block of the model which transforms the input data and passes it to the next. LLMs have many layers stacked together.
-
-**Embedding Layer** – Converts tokens into vectors.
-
-**Attention Layer** – Applies self-attention to understand relationships.
-
-**Feed-Forward Layer** – Adds complexity and depth to the model’s understanding.
-
-**Head** – A sub-unit inside an attention layer. Each head focuses on different aspects of the input (e.g., grammar, relationships, facts).
-
-**Multi Head Attention (MHA)** – is a core component of Transformer architectures which allows the model to attend to different parts of the input sequence in parallel, using multiple attention "heads."
-
-**Grouped Query Attention (GQA)** – it groups multiple heads to share the same key and value projections.
-
-**Multi-Head Latent Attention (MLA)** – it compresses the key and value tensors into a lower-dimensional space before storing them in the KV cache.
-
-**Mixture-of-Experts (MoE)** – is a modular architecture where different "expert" subnetworks are selectively activated per input token, often used to scale models efficiently.
-
-**Mixture Head Attention (MoH)** – is reimagined as an MoE system, where heads = experts while replaces the standard summation of heads with a weighted, token-specific selection.
-
-🔁 **Training Process**
-
-**Training** – The process of teaching the model by showing it lots of text and adjusting its parameters to reduce errors. It involves feeding data, calculating predictions, comparing them to actual results, and updating weights.
-
-**Epoch** – One full pass through the training data. Usually repeated many times to help the model learn better.
-
-**Batch** – A small group of training examples processed together. This makes training faster and more efficient.
-
-**Iteration** – One update to the model’s parameters. If you have 10,000 samples and a batch size of 100, you’ll do 100 iterations per epoch.
-
-**Gradient Descent** – The method used to adjust parameters during training. It helps the model get better by reducing errors step-by-step.
-
-**Loss Function** – A mathematical formula that measures how far off the model’s predictions are from the correct answers. The goal is to minimize this loss during training.
-
-🧪 **Inference Process**
-
-**Inference** – When the model uses what it learned to generate answers. This is what happens when you chat with it.
-
-**Zero-shot Learning** – The model solves tasks it hasn’t seen before, using general knowledge.
-
-**Few-shot Learning** – The model is given a few examples before solving a task.
-
-**Hallucination** – When the model makes up facts or gives incorrect information confidently.
-
-📊 **Evaluation**
-
-**MMLU** (Massive Multitask Language Understanding) – A benchmark that tests how well a model performs across 57 subjects (like math, law, and history). Scores range from 0 to 100.
-
-**GLUE** (General Language Understanding Evaluation) – A set of tasks used to measure how well a model understands language. Includes things like sentiment analysis and question answering.
-
-📈 **Performance**
-
-**FLOPs** (Floating Point Operations) – A measure of how much computing power is needed. More FLOPs = more expensive and slower processing. GPT-3 uses ~350 billion FLOPs per token.
-
-**Latency** – How long it takes for the model to respond. Lower latency = faster answers.
-
-
-
-## 🧾 References
-
-**Yann Dubois**
-
-https://www.youtube.com/watch?v=9vM4p9NN0Ts / Stanford CS229 I Machine Learning I Building Large Language Models (LLMs)
-
-**Sebastian Raschka**
-
-https://www.youtube.com/watch?v=79F32D9aM8U / Build LLMs From Scratch with Sebastian Raschka #52
-
-https://www.youtube.com/watch?v=Zar2TJv-sE0 / Build an LLM from Scratch 5: Pretraining on Unlabeled Data
-
-**Andrej Karpathy**
-
-https://www.youtube.com/watch?v=l8pRSuU81PU / Let's reproduce GPT-2 (124M)
-
-https://www.youtube.com/watch?v=EWvNQjAaOHw / How I use LLMs

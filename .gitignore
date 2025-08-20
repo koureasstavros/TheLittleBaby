@@ -14,8 +14,14 @@
 /expirements/
 # Ignore the entire improvements directory
 /improvements/
+# Ignore the entire pychache directory
+**/__pycache__/
 
 # Ignore the enviroment variables file
 /.env
 # Ignore any other GPT Numpy json file
-/GPT Numpy*.ipynb
+/GPT *.py
+/GPT Numpy *.py
+# Ignore any other GPT Numpy json file
+/GPT *.ipynb
+/GPT Numpy *.ipynb

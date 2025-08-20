@@ -6,6 +6,7 @@
     "average_val_loss_per_epoch": 1.4670019110027666,
     "average_time_per_epoch": 320999.9565153122,
 	"total_time": 320999.9565153122,
+    "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/62733 | train_loss = 4.1800 | execution_time = 3.8323",
         "Epoch 1/1 | Batch 2/62733 | train_loss = 3.8807 | execution_time = 3.8770",

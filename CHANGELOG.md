@@ -1,17 +1,20 @@
 ## 📦 Changelog
+In this changelog, you can find a concise summary of all the updates made to the software—ranging from new features and performance improvements to bug fixes. It serves as a transparent record that helps users track the evolution of the software across different versions. Whether you're looking for what's new, what's changed, or what’s been resolved, the changelog is your go-to snapshot of progress.
 
-- Version v0.0.5
-  - Refactored Little Baby's code
-  - Implemented save and load of tokenizer
-  - Added finetune option into the workflow
-  - Added cache into inference process (kv_cache)
-  - Removed some python loops to increase cores used
+- Version v0.1.0
+  - Refactored code from notebook (ipynb) to python (py)
+  - Added c_device config to choose between cpu and gpu
+  - Added GPU Support
+  - Added Grouped Query Attention (gqa)
+  - Added Switch Head Attention (swh)
+  - Added Attention Free Transformer (aft)
+  - Added Network Free Transformer (nft)
 
-- Version v0.0.6
-  - Switched model file extension from weights to json
+- Version v0.0.10
+  - Added expirement
 
-- Version v0.0.7
-  - Fixed epoch and batch report prints
+- Version v0.0.9
+  - Moved config files into Hugging Face Repo
 
 - Version v0.0.8
   - Added debug option
@@ -26,9 +29,16 @@
   - Added Mixture of Experts (moe)
   - Added model load / save for Mixture of Experts (moe)
   - Aligned naming conventions for common attributes
+  
+- Version v0.0.7
+  - Fixed epoch and batch report prints
 
-- Version v0.0.9
-  - Moved config files into Hugging Face Repo
+- Version v0.0.6
+  - Switched model file extension from weights to json
 
-- Version v0.0.10
-  - Added expirement
+- Version v0.0.5
+  - Refactored Little Baby's code
+  - Implemented save and load of tokenizer
+  - Added finetune option into the workflow
+  - Added cache into inference process (kv_cache)
+  - Removed some python loops to increase cores used
