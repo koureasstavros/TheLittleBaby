@@ -237,3 +237,33 @@ class MOH(Module):
         grads_all.extend(m_proj_grads)
 
         return grad_x, grads_all
+    
+    def from_dict(self, weights_dict, i):
+        self.q_proj.weight = weights_dict[f'block_{i}_moh_q_weight']
+        self.k_proj.weight = weights_dict[f'block_{i}_moh_k_weight']
+        self.v_proj.weight = weights_dict[f'block_{i}_moh_v_weight']
+        self.g_proj.weight = weights_dict[f'block_{i}_moh_g_weight']
+        if weights_dict[f'block_{i}_moh_g_bias'] is not None:
+            self.g_proj.bias = weights_dict[f'block_{i}_moh_g_bias']
+        self.m_proj.weight = weights_dict[f'block_{i}_moh_m_weight']
+        if weights_dict[f'block_{i}_moh_m_bias'] is not None:
+            self.m_proj.bias = weights_dict[f'block_{i}_moh_m_bias']
+
+        self.q_proj._parameters = [self.q_proj.weight]
+        self.k_proj._parameters = [self.k_proj.weight]
+        self.v_proj._parameters = [self.v_proj.weight]
+        self.g_proj._parameters = [self.g_proj.weight]
+        if self.g_proj.bias is not None:
+            self.g_proj._parameters.append(self.g_proj.bias)
+        self.m_proj._parameters = [self.m_proj.weight]
+        if self.m_proj.bias is not None:
+            self.m_proj._parameters.append(self.m_proj.bias)
+
+    def to_dict(self, weights_dict, i):
+        weights_dict[f'block_{i}_moh_q_weight'] = self.q_proj.weight
+        weights_dict[f'block_{i}_moh_k_weight'] = self.k_proj.weight
+        weights_dict[f'block_{i}_moh_v_weight'] = self.v_proj.weight
+        weights_dict[f'block_{i}_moh_g_weight'] = self.g_proj.weight
+        weights_dict[f'block_{i}_moh_g_bias'] = self.g_proj.bias if self.g_proj.bias is not None else None
+        weights_dict[f'block_{i}_moh_m_weight'] = self.m_proj.weight
+        weights_dict[f'block_{i}_moh_m_bias'] = self.m_proj.bias if self.m_proj.bias is not None else None

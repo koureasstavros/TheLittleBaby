@@ -14,21 +14,21 @@ class MOE(Module):
     y = sum_e softmax(gate(x))_e * Expert_e(x)
     Each Expert_e: Linear_up -> GELU -> Linear_down -> Dropout
     """
-    def __init__(self, mp, n_emb, p_dropout, n_experts, expansion):
+    def __init__(self, mp, n_emb, p_dropout, n_expansion, n_experts):
         super().__init__()
         self.mp = mp
         self.n_emb = n_emb
+        self.n_expansion = n_expansion
         self.n_experts = n_experts
-        self.expansion = expansion
 
         # Gating linear (no bias for simplicity)
         self.g_proj = Linear(mp, n_emb, n_experts, bias=False)
 
         # Experts: separate parameter sets
-        self.c_proj_up = [Linear(mp, n_emb, expansion * n_emb) for _ in range(n_experts)]
-        self.c_proj_dn = [Linear(mp, expansion * n_emb, n_emb) for _ in range(n_experts)]
+        self.c_proj_up = [Linear(mp, n_emb, n_expansion * n_emb) for _ in range(n_experts)]
+        self.c_proj_dn = [Linear(mp, n_expansion * n_emb, n_emb) for _ in range(n_experts)]
 
-        self.dropout = Dropout(mp, p_dropout)
+        self.p_dropout = Dropout(mp, p_dropout)
 
     def parameters(self):
         params = self.g_proj.parameters()
@@ -42,7 +42,7 @@ class MOE(Module):
         self.g_proj.set(mode)
         for u, d in zip(self.c_proj_up, self.c_proj_dn):
             u.set(mode); d.set(mode)
-        self.dropout.set(mode)
+        self.p_dropout.set(mode)
 
     def forward(self, x):
         """
@@ -70,7 +70,7 @@ class MOE(Module):
 
         # Weighted sum over experts
         y = self.mp.sum(gate_probs[..., None] * expert_out_stacked, axis=2)  # (B,T,D)
-        y = self.dropout.forward(y)
+        y = self.p_dropout.forward(y)
 
         # Cache for backward
         self._cache = (x, gate_logits, gate_probs,
@@ -87,7 +87,7 @@ class MOE(Module):
         E = self.n_experts
 
         # 1. Dropout backward
-        grad_y, _ = self.dropout.backward(grad_output)  # (B,T,D)
+        grad_y, _ = self.p_dropout.backward(grad_output)  # (B,T,D)
 
         # 2. Grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
         # For each expert e: contribution scaled by p_e
@@ -132,3 +132,39 @@ class MOE(Module):
         # gate params first, then each expert's up then down
         param_grads = gate_param_grads + expert_param_grads_flat
         return grad_x_total, param_grads
+    
+    def from_dict(self, weights_dict, i):
+        self.g_proj.weight = weights_dict[f'block_{i}_moe_g_weight']
+        if weights_dict[f'block_{i}_moe_g_bias'] is not None:
+            self.g_proj.bias = weights_dict[f'block_{i}_moe_g_bias']
+        self.n_expansion = int(weights_dict[f'block_{i}_moe_n_expansion'])
+        self.n_experts = int(weights_dict[f'block_{i}_moe_n_experts'])
+        for expert_idx in range(self.n_experts):
+            self.c_proj_up[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight']
+            if weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] is not None:
+                self.c_proj_up[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias']
+            self.c_proj_dn[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight']
+            if weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] is not None:
+                self.c_proj_dn[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias']
+
+        self.g_proj._parameters = [self.g_proj.weight]
+        if self.g_proj.bias is not None:
+            self.g_proj._parameters.append(self.g_proj.bias)
+        for expert_idx in range(self.n_experts):
+            self.c_proj_up[expert_idx]._parameters = [self.c_proj_up[expert_idx].weight]
+            if self.c_proj_up[expert_idx].bias is not None:
+                self.c_proj_up[expert_idx]._parameters.append(self.c_proj_up[expert_idx].bias)
+            self.c_proj_dn[expert_idx]._parameters = [self.c_proj_dn[expert_idx].weight]
+            if self.c_proj_dn[expert_idx].bias is not None:
+                self.c_proj_dn[expert_idx]._parameters.append(self.c_proj_dn[expert_idx].bias)
+
+    def to_dict(self, weights_dict, i):
+        weights_dict[f'block_{i}_moe_g_weight'] = self.g_proj.weight
+        weights_dict[f'block_{i}_moe_g_bias'] = self.g_proj.bias if self.g_proj.bias is not None else None
+        weights_dict[f'block_{i}_moe_n_expansion'] = self.n_expansion
+        weights_dict[f'block_{i}_moe_n_experts'] = self.n_experts
+        for expert_idx in range(self.n_experts):
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight'] = self.c_proj_up[expert_idx].weight
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] = self.c_proj_up[expert_idx].bias if self.c_proj_up[expert_idx].bias is not None else None
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight'] = self.c_proj_dn[expert_idx].weight
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] = self.c_proj_dn[expert_idx].bias if self.c_proj_dn[expert_idx].bias is not None else None

@@ -238,3 +238,25 @@ class GQA(Module):
         grads_all.extend(c_proj_grads)
 
         return grad_x, grads_all
+    
+    def from_dict(self, weights_dict, i):
+        self.q_proj.weight = weights_dict[f'block_{i}_gqa_q_weight']
+        self.k_proj.weight = weights_dict[f'block_{i}_gqa_k_weight']
+        self.v_proj.weight = weights_dict[f'block_{i}_gqa_v_weight']
+        self.c_proj.weight = weights_dict[f'block_{i}_gqa_c_weight']
+        if weights_dict.get(f'block_{i}_gqa_c_bias') is not None:
+            self.c_proj.bias = weights_dict[f'block_{i}_gqa_c_bias']
+
+        self.q_proj._parameters = [self.q_proj.weight]
+        self.k_proj._parameters = [self.k_proj.weight]
+        self.v_proj._parameters = [self.v_proj.weight]
+        self.c_proj._parameters = [self.c_proj.weight]
+        if self.c_proj.bias is not None:
+            self.c_proj._parameters.append(self.c_proj.bias)
+
+    def to_dict(self, weights_dict, i):
+        weights_dict[f'block_{i}_gqa_q_weight'] = self.q_proj.weight
+        weights_dict[f'block_{i}_gqa_k_weight'] = self.k_proj.weight
+        weights_dict[f'block_{i}_gqa_v_weight'] = self.v_proj.weight
+        weights_dict[f'block_{i}_gqa_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_gqa_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None

@@ -9,9 +9,9 @@ import time as tm
 from src.block import Block
 from src.module import Module
 from src.tokenizer import Tokenizer
-from src.optimizers.adam import AdamW
-from src.layers.embedding import Embedding
+from src.optimizer import Optimizer
 from src.layers.linear import Linear
+from src.layers.embedding import Embedding
 from src.layers.normalization import Normalization
 from src.functions.runtime import is_debug
 from src.functions.helper import load_package
@@ -29,7 +29,7 @@ class GPT(Module):
         device = config["c_device"]
         if device == "cpu":
             # Use NumPy
-            print(f"Using CPU")
+            print(f"{'-'*10} {"Using CPU (with NumPy)"} {'-'*10}" )
             load_package(["numpy"])
             system_cores = os.cpu_count()
             print(f"Detected CPU cores: {system_cores}")
@@ -50,7 +50,7 @@ class GPT(Module):
 
         elif device == "gpu":
             # Use CuPy
-            print(f"Using GPU")
+            print(f"{'-'*10} {"Using GPU (with CuPy)"} {'-'*10}" )
             load_package(["cupy"])
             os.environ["CUPY_TF32"] = config["c_device_gpu_tensor"] #[0=FP32, 1=TF32]
             os.environ["CUPY_ACCELERATORS"] = "cub,cutensor,cutensornet"
@@ -69,6 +69,10 @@ class GPT(Module):
 
         else:
             raise ValueError(f"Unsupported device type: {device}. Supported types are 'cpu' and 'gpu'.")
+    
+        print(f"{'-'*10} {"Using Configuration"} {'-'*10}" )
+        for key, value in config.items():
+            print(f"{key}: {value}")
 
         self.mp = mp
         self.report_dict = None
@@ -79,6 +83,7 @@ class GPT(Module):
         self.c_sequence = config["c_sequence"]
         self.c_attention = config["c_attention"]
         self.c_network = config["c_network"]
+        self.c_optimizer = config["c_optimizer"]
 
         self.n_emb = config["n_emb"]
         self.n_ctx = config["n_ctx"]
@@ -374,162 +379,10 @@ class GPT(Module):
             block.ln_2._parameters = [block.ln_2.gamma, block.ln_2.beta]
             
             # Attention
-            match self.c_attention:
-                case "mha":
-                    block.att.q_proj.weight = weights_dict[f'block_{i}_mha_q_weight']
-                    block.att.k_proj.weight = weights_dict[f'block_{i}_mha_k_weight']
-                    block.att.v_proj.weight = weights_dict[f'block_{i}_mha_v_weight']
-                    block.att.c_proj.weight = weights_dict[f'block_{i}_mha_c_weight']
-                    if weights_dict[f'block_{i}_mha_c_bias'] is not None:
-                        block.att.c_proj.bias = weights_dict[f'block_{i}_mha_c_bias']
-
-                case "moh":
-                    block.att.q_proj.weight = weights_dict[f'block_{i}_moh_q_weight']
-                    block.att.k_proj.weight = weights_dict[f'block_{i}_moh_k_weight']
-                    block.att.v_proj.weight = weights_dict[f'block_{i}_moh_v_weight']
-                    block.att.g_proj.weight = weights_dict[f'block_{i}_moh_g_weight']
-                    if weights_dict[f'block_{i}_moh_g_bias'] is not None:
-                        block.att.g_proj.bias = weights_dict[f'block_{i}_moh_g_bias']
-                    block.att.m_proj.weight = weights_dict[f'block_{i}_moh_m_weight']
-                    if weights_dict[f'block_{i}_moh_m_bias'] is not None:
-                        block.att.m_proj.bias = weights_dict[f'block_{i}_moh_m_bias']
-
-                case "gqa":
-                    block.att.q_proj.weight = weights_dict[f'block_{i}_gqa_q_weight']
-                    block.att.k_proj.weight = weights_dict[f'block_{i}_gqa_k_weight']
-                    block.att.v_proj.weight = weights_dict[f'block_{i}_gqa_v_weight']
-                    block.att.c_proj.weight = weights_dict[f'block_{i}_gqa_c_weight']
-                    if weights_dict.get(f'block_{i}_gqa_c_bias') is not None:
-                        block.att.c_proj.bias = weights_dict[f'block_{i}_gqa_c_bias']
-
-                case "swh":
-                    block.att.q_proj.weight = weights_dict[f'block_{i}_swh_q_weight']
-                    block.att.k_proj.weight = weights_dict[f'block_{i}_swh_k_weight']
-                    block.att.v_proj.weight = weights_dict[f'block_{i}_swh_v_weight']
-                    block.att.g_proj.weight = weights_dict[f'block_{i}_swh_g_weight']
-                    if weights_dict.get(f'block_{i}_swh_g_bias') is not None:
-                        block.att.g_proj.bias = weights_dict[f'block_{i}_swh_g_bias']
-                    block.att.m_proj.weight = weights_dict[f'block_{i}_swh_m_weight']
-                    if weights_dict.get(f'block_{i}_swh_m_bias') is not None:
-                        block.att.m_proj.bias = weights_dict[f'block_{i}_swh_m_bias']
-
-                case "aft":
-                    block.att.q_proj.weight = weights_dict[f'block_{i}_aft_q_weight']
-                    block.att.k_proj.weight = weights_dict[f'block_{i}_aft_k_weight']
-                    block.att.v_proj.weight = weights_dict[f'block_{i}_aft_v_weight']
-                    block.att.c_proj.weight = weights_dict[f'block_{i}_aft_c_weight']
-                    if weights_dict.get(f'block_{i}_aft_c_bias') is not None:
-                        block.att.c_proj.bias = weights_dict[f'block_{i}_aft_c_bias']
-
-            # Update Attention _parameters
-            match self.c_attention:
-                case "mha":
-                    block.att.q_proj._parameters = [block.att.q_proj.weight]
-                    block.att.k_proj._parameters = [block.att.k_proj.weight]
-                    block.att.v_proj._parameters = [block.att.v_proj.weight]
-                    block.att.c_proj._parameters = [block.att.c_proj.weight]
-                    if block.att.c_proj.bias is not None:
-                        block.att.c_proj._parameters.append(block.att.c_proj.bias)
-
-                case "moh":
-                    block.att.q_proj._parameters = [block.att.q_proj.weight]
-                    block.att.k_proj._parameters = [block.att.k_proj.weight]
-                    block.att.v_proj._parameters = [block.att.v_proj.weight]
-                    block.att.g_proj._parameters = [block.att.g_proj.weight]
-                    if block.att.g_proj.bias is not None:
-                        block.att.g_proj._parameters.append(block.att.g_proj.bias)
-                    block.att.m_proj._parameters = [block.att.m_proj.weight]
-                    if block.att.m_proj.bias is not None:
-                        block.att.m_proj._parameters.append(block.att.m_proj.bias)
-
-                case "gqa":
-                    block.att.q_proj._parameters = [block.att.q_proj.weight]
-                    block.att.k_proj._parameters = [block.att.k_proj.weight]
-                    block.att.v_proj._parameters = [block.att.v_proj.weight]
-                    block.att.c_proj._parameters = [block.att.c_proj.weight]
-                    if block.att.c_proj.bias is not None:
-                        block.att.c_proj._parameters.append(block.att.c_proj.bias)
-
-                case "swh":
-                    block.att.q_proj._parameters = [block.att.q_proj.weight]
-                    block.att.k_proj._parameters = [block.att.k_proj.weight]
-                    block.att.v_proj._parameters = [block.att.v_proj.weight]
-                    block.att.g_proj._parameters = [block.att.g_proj.weight]
-                    if block.att.g_proj.bias is not None:
-                        block.att.g_proj._parameters.append(block.att.g_proj.bias)
-                    block.att.m_proj._parameters = [block.att.m_proj.weight]
-                    if block.att.m_proj.bias is not None:
-                        block.att.m_proj._parameters.append(block.att.m_proj.bias)
-
-                case "aft":
-                    block.att.q_proj._parameters = [block.att.q_proj.weight]
-                    block.att.k_proj._parameters = [block.att.k_proj.weight]
-                    block.att.v_proj._parameters = [block.att.v_proj.weight]
-                    block.att.c_proj._parameters = [block.att.c_proj.weight]
-                    if block.att.c_proj.bias is not None:
-                        block.att.c_proj._parameters.append(block.att.c_proj.bias)
+            block.att.from_dict(weights_dict, i)
 
             # Network
-            match self.c_network:
-                case "mlp":
-                    block.net.c_proj_up.weight = weights_dict[f'block_{i}_mlp_proj_up_weight']
-                    if weights_dict[f'block_{i}_mlp_proj_up_bias'] is not None:
-                        block.net.c_proj_up.bias = weights_dict[f'block_{i}_mlp_proj_up_bias']
-                    block.net.c_proj_dn.weight = weights_dict[f'block_{i}_mlp_proj_dn_weight']
-                    if weights_dict[f'block_{i}_mlp_proj_dn_bias'] is not None:
-                        block.net.c_proj_dn.bias = weights_dict[f'block_{i}_mlp_proj_dn_bias']
-
-                case "moe":
-                    block.net.g_proj.weight = weights_dict[f'block_{i}_moe_g_weight']
-                    if weights_dict[f'block_{i}_moe_g_bias'] is not None:
-                        block.net.g_proj.bias = weights_dict[f'block_{i}_moe_g_bias']
-                    block.net.expansion = weights_dict[f'block_{i}_moe_expansion']
-                    block.net.n_experts = weights_dict[f'block_{i}_moe_n_experts']
-                    for expert_idx in range(block.net.n_experts):
-                        block.net.c_proj_up[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight']
-                        if weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] is not None:
-                            block.net.c_proj_up[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias']
-                        block.net.c_proj_dn[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight']
-                        if weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] is not None:
-                            block.net.c_proj_dn[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias']
-
-                case "nft":
-                    block.net.q_proj.weight = weights_dict[f'block_{i}_net_nft_q_weight']
-                    block.net.k_proj.weight = weights_dict[f'block_{i}_net_nft_k_weight']
-                    block.net.v_proj.weight = weights_dict[f'block_{i}_net_nft_v_weight']
-                    block.net.c_proj.weight = weights_dict[f'block_{i}_net_nft_c_weight']
-                    if weights_dict.get(f'block_{i}_net_nft_c_bias') is not None:
-                        block.net.c_proj.bias = weights_dict[f'block_{i}_net_nft_c_bias']
-
-            # Update Network_parameters
-            match self.c_network:
-                case "mlp":
-                    block.net.c_proj_up._parameters = [block.net.c_proj_up.weight]
-                    if block.net.c_proj_up.bias is not None:
-                        block.net.c_proj_up._parameters.append(block.net.c_proj_up.bias)
-                    block.net.c_proj_dn._parameters = [block.net.c_proj_dn.weight]
-                    if block.net.c_proj_dn.bias is not None:
-                        block.net.c_proj_dn._parameters.append(block.net.c_proj_dn.bias)
-
-                case "moe":
-                    block.net.g_proj._parameters = [block.net.g_proj.weight]
-                    if block.net.g_proj.bias is not None:
-                        block.net.g_proj._parameters.append(block.net.g_proj.bias)
-                    for expert_idx in range(block.net.n_experts):
-                        block.net.c_proj_up[expert_idx]._parameters = [block.net.c_proj_up[expert_idx].weight]
-                        if block.net.c_proj_up[expert_idx].bias is not None:
-                            block.net.c_proj_up[expert_idx]._parameters.append(block.net.c_proj_up[expert_idx].bias)
-                        block.net.c_proj_dn[expert_idx]._parameters = [block.net.c_proj_dn[expert_idx].weight]
-                        if block.net.c_proj_dn[expert_idx].bias is not None:
-                            block.net.c_proj_dn[expert_idx]._parameters.append(block.net.c_proj_dn[expert_idx].bias)
-
-                case "nft":
-                    block.net.q_proj._parameters = [block.net.q_proj.weight]
-                    block.net.k_proj._parameters = [block.net.k_proj.weight]
-                    block.net.v_proj._parameters = [block.net.v_proj.weight]
-                    block.net.c_proj._parameters = [block.net.c_proj.weight]
-                    if block.net.c_proj.bias is not None:
-                        block.net.c_proj._parameters.append(block.net.c_proj.bias)
+            block.net.from_dict(weights_dict, i)
 
     def params_to_dict(self):     
         """ Model parameters to a JSON file. """
@@ -549,7 +402,7 @@ class GPT(Module):
             'lm_head_bias': self.lm_head.bias if self.lm_head.bias is not None else None,
         }
         
-        # Add block weights
+        # Add block parameters
         for i, block in enumerate(self.blocks):
             # Layer norms
             weights_dict[f'block_{i}_ln1_gamma'] = block.ln_1.gamma
@@ -558,70 +411,10 @@ class GPT(Module):
             weights_dict[f'block_{i}_ln2_beta'] = block.ln_2.beta
             
             # Attention
-            match self.c_attention:
-                case "mha":
-                    weights_dict[f'block_{i}_mha_q_weight'] = block.att.q_proj.weight
-                    weights_dict[f'block_{i}_mha_k_weight'] = block.att.k_proj.weight
-                    weights_dict[f'block_{i}_mha_v_weight'] = block.att.v_proj.weight
-                    weights_dict[f'block_{i}_mha_c_weight'] = block.att.c_proj.weight
-                    weights_dict[f'block_{i}_mha_c_bias'] = block.att.c_proj.bias if block.att.c_proj.bias is not None else None
-                
-                case "moh":
-                    weights_dict[f'block_{i}_moh_q_weight'] = block.att.q_proj.weight
-                    weights_dict[f'block_{i}_moh_k_weight'] = block.att.k_proj.weight
-                    weights_dict[f'block_{i}_moh_v_weight'] = block.att.v_proj.weight
-                    weights_dict[f'block_{i}_moh_g_weight'] = block.att.g_proj.weight
-                    weights_dict[f'block_{i}_moh_g_bias'] = block.att.g_proj.bias if block.att.g_proj.bias is not None else None
-                    weights_dict[f'block_{i}_moh_m_weight'] = block.att.m_proj.weight
-                    weights_dict[f'block_{i}_moh_m_bias'] = block.att.m_proj.bias if block.att.m_proj.bias is not None else None
-            
-                case "gqa":
-                    weights_dict[f'block_{i}_gqa_q_weight'] = block.att.q_proj.weight
-                    weights_dict[f'block_{i}_gqa_k_weight'] = block.att.k_proj.weight
-                    weights_dict[f'block_{i}_gqa_v_weight'] = block.att.v_proj.weight
-                    weights_dict[f'block_{i}_gqa_c_weight'] = block.att.c_proj.weight
-                    weights_dict[f'block_{i}_gqa_c_bias'] = block.att.c_proj.bias if block.att.c_proj.bias is not None else None
-
-                case "swh":
-                    weights_dict[f'block_{i}_swh_q_weight'] = block.att.q_proj.weight
-                    weights_dict[f'block_{i}_swh_k_weight'] = block.att.k_proj.weight
-                    weights_dict[f'block_{i}_swh_v_weight'] = block.att.v_proj.weight
-                    weights_dict[f'block_{i}_swh_g_weight'] = block.att.g_proj.weight
-                    weights_dict[f'block_{i}_swh_g_bias'] = block.att.g_proj.bias if block.att.g_proj.bias is not None else None
-                    weights_dict[f'block_{i}_swh_m_weight'] = block.att.m_proj.weight
-                    weights_dict[f'block_{i}_swh_m_bias'] = block.att.m_proj.bias if block.att.m_proj.bias is not None else None
-                    
-                case "aft":
-                    weights_dict[f'block_{i}_aft_q_weight'] = block.att.q_proj.weight
-                    weights_dict[f'block_{i}_aft_k_weight'] = block.att.k_proj.weight
-                    weights_dict[f'block_{i}_aft_v_weight'] = block.att.v_proj.weight
-                    weights_dict[f'block_{i}_aft_c_weight'] = block.att.c_proj.weight
+            block.att.to_dict(weights_dict, i)
 
             # Network
-            match self.c_network:
-                case "mlp":
-                    weights_dict[f'block_{i}_mlp_proj_up_weight'] = block.net.c_proj_up.weight
-                    weights_dict[f'block_{i}_mlp_proj_up_bias'] = block.net.c_proj_up.bias if block.net.c_proj_up.bias is not None else None
-                    weights_dict[f'block_{i}_mlp_proj_dn_weight'] = block.net.c_proj_dn.weight
-                    weights_dict[f'block_{i}_mlp_proj_dn_bias'] = block.net.c_proj_dn.bias if block.net.c_proj_dn.bias is not None else None
-                
-                case "moe":
-                    weights_dict[f'block_{i}_moe_g_weight'] = block.net.g_proj.weight
-                    weights_dict[f'block_{i}_moe_g_bias'] = block.net.g_proj.bias if block.net.g_proj.bias is not None else None
-                    weights_dict[f'block_{i}_moe_expansion'] = block.net.expansion
-                    weights_dict[f'block_{i}_moe_n_experts'] = block.net.n_experts
-                    for expert_idx in range(block.net.n_experts):
-                        weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight'] = block.net.c_proj_up[expert_idx].weight
-                        weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] = block.net.c_proj_up[expert_idx].bias if block.net.c_proj_up[expert_idx].bias is not None else None
-                        weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight'] = block.net.c_proj_dn[expert_idx].weight
-                        weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] = block.net.c_proj_dn[expert_idx].bias if block.net.c_proj_dn[expert_idx].bias is not None else None
-
-                case "nft":
-                    weights_dict[f'block_{i}_net_nft_q_weight'] = block.net.q_proj.weight
-                    weights_dict[f'block_{i}_net_nft_k_weight'] = block.net.k_proj.weight
-                    weights_dict[f'block_{i}_net_nft_v_weight'] = block.net.v_proj.weight
-                    weights_dict[f'block_{i}_net_nft_c_weight'] = block.net.c_proj.weight
-                    weights_dict[f'block_{i}_net_nft_c_bias'] = block.net.c_proj.bias if block.net.c_proj.bias is not None else None
+            block.net.to_dict(weights_dict, i)
         
         # Convert numpy arrays to lists for JSON serialization
         json_weights_dict = {}
@@ -664,8 +457,8 @@ class GPT(Module):
 
     def train(self, input_text, train_cache, n_epochs, batch_size, lr):
         """ Train the GPT model on the provided input data. """
-        print("--- Start training ---")
-        
+        print(f"{'-'*10} {"Training in progress"} {'-'*10}" )
+
         # Tokenize the input data
         train_data, val_data = self.tokenizer.tokenize(input_text)        
 
@@ -683,9 +476,11 @@ class GPT(Module):
         if vocab_size > self.vocab_size: # If the vocabulary size has changed, expand embeddings
             self.expand_embeddings(vocab_size)
 
-        params = self.parameters() # Get all trainable parameters from the model
+        # Get parameters from the model
+        params = self.parameters() 
 
-        optimizer = AdamW(self.mp, params, learning_rate=lr)
+        # Initialize the optimizer
+        optimizer = Optimizer(self.mp, self.c_optimizer, params, learning_rate=lr)
 
         batch_logs = []
         epoch_logs = []
@@ -771,12 +566,12 @@ class GPT(Module):
         # Create the report object
         report_dict = {
             "num_epochs": n_epochs,
-            "train_batches_per_epoch": train_batch_all,
-            "val_batches_per_epoch": val_batch_all,
-            "average_train_loss_per_epoch": avg_train_loss,
-            "average_val_loss_per_epoch": avg_val_loss,
-            "average_time_per_epoch": epoch_total_time_avg,
-            "total_time": total_time,
+            "train_batches_per_epoch": int(train_batch_all),
+            "val_batches_per_epoch": int(val_batch_all),
+            "average_train_loss_per_epoch": float(avg_train_loss),
+            "average_val_loss_per_epoch": float(avg_val_loss),
+            "average_time_per_epoch": float(epoch_total_time_avg),
+            "total_time": float(total_time),
             "train_cache": train_cache,
             "batch_logs": batch_logs,
             "epoch_logs": epoch_logs
@@ -784,12 +579,10 @@ class GPT(Module):
 
         # Save the report to JSON
         self.report_dict = report_dict
-        
-        print("--- Stop training ---")
 
     def inference(self, prompt, infer_cache):
         """ Perform inference with the trained model using a given prompt. """
-        print("--- Start Inference ---")
+        print(f"{'-'*10} {"Infrerence in progress"} {'-'*10}" )
 
         # Update vocab size
         self.vocab_size = self.tokenizer.vocab_size  # Update model vocabulary size from tokenizer
@@ -830,5 +623,3 @@ class GPT(Module):
         print(completion_dict)
 
         self.completion_dict = completion_dict
-
-        print("--- Stop Inference ---")

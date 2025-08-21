@@ -23,7 +23,7 @@ class NFT(Module):
 
     Params order preserved: q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout, use_gate=True, clip=20.0):
+    def __init__(self, mp, n_emb, n_ctx, p_dropout, use_gate, clip):
         super().__init__()
         self.mp = mp
         self.n_emb = n_emb
@@ -224,3 +224,25 @@ class NFT(Module):
         param_grads.extend(v_grads)
         param_grads.extend(c_grads)
         return grad_x, param_grads
+    
+    def from_dict(self, weights_dict, i):
+        self.q_proj.weight = weights_dict[f'block_{i}_net_nft_q_weight']
+        self.k_proj.weight = weights_dict[f'block_{i}_net_nft_k_weight']
+        self.v_proj.weight = weights_dict[f'block_{i}_net_nft_v_weight']
+        self.c_proj.weight = weights_dict[f'block_{i}_net_nft_c_weight']
+        if weights_dict.get(f'block_{i}_net_nft_c_bias') is not None:
+            self.c_proj.bias = weights_dict[f'block_{i}_net_nft_c_bias']
+
+        self.q_proj._parameters = [self.q_proj.weight]
+        self.k_proj._parameters = [self.k_proj.weight]
+        self.v_proj._parameters = [self.v_proj.weight]
+        self.c_proj._parameters = [self.c_proj.weight]
+        if self.c_proj.bias is not None:
+            self.c_proj._parameters.append(self.c_proj.bias)
+
+    def to_dict(self, weights_dict, i):
+        weights_dict[f'block_{i}_net_nft_q_weight'] = self.q_proj.weight
+        weights_dict[f'block_{i}_net_nft_k_weight'] = self.k_proj.weight
+        weights_dict[f'block_{i}_net_nft_v_weight'] = self.v_proj.weight
+        weights_dict[f'block_{i}_net_nft_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_net_nft_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None

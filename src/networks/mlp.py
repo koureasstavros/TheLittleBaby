@@ -13,16 +13,16 @@ class MLP(Module):
     Multi-Layer Perceptron block, typically used in Transformer after attention.
     Consists of two linear layers with GELU activation and dropout.
     """
-    def __init__(self, mp, n_emb, p_dropout):
+    def __init__(self, mp, n_emb, p_dropout, n_expansion):
         super().__init__()
         self.mp = mp
         
         # First linear layer (expands dimension)
-        self.c_proj_up = Linear(mp, n_emb, 4 * n_emb)
+        self.c_proj_up = Linear(mp, n_emb, n_expansion * n_emb)
         # Second linear layer (projects back to original dimension)
-        self.c_proj_dn = Linear(mp, 4 * n_emb, n_emb)
+        self.c_proj_dn = Linear(mp, n_expansion * n_emb, n_emb)
         # Dropout layer
-        self.dropout = Dropout(mp, p_dropout)
+        self.p_dropout = Dropout(mp, p_dropout)
 
     def parameters(self):
         """Returns all parameters of the MLP module."""
@@ -33,7 +33,7 @@ class MLP(Module):
         super().set(mode)
         self.c_proj_up.set(mode)
         self.c_proj_dn.set(mode)
-        self.dropout.set(mode)
+        self.p_dropout.set(mode)
 
     def forward(self, x):
         """
@@ -46,7 +46,7 @@ class MLP(Module):
         fc_out = self.c_proj_up.forward(x)
         gelu_out = gelu(self.mp, fc_out)
         proj_out = self.c_proj_dn.forward(gelu_out)
-        dropped_out = self.dropout.forward(proj_out)
+        dropped_out = self.p_dropout.forward(proj_out)
 
         # Store intermediate results for backward pass
         self._cache = (fc_out, gelu_out, proj_out)
@@ -65,7 +65,7 @@ class MLP(Module):
         current_mlp_param_grads = []
 
         # 1. Backward through dropout
-        grad_proj_out, _ = self.dropout.backward(grad_output)
+        grad_proj_out, _ = self.p_dropout.backward(grad_output)
 
         # 2. Backward through c_proj_dn
         grad_gelu_out, c_proj_dn_grads = self.c_proj_dn.backward(grad_proj_out)
@@ -82,3 +82,24 @@ class MLP(Module):
         current_mlp_param_grads.extend(c_proj_dn_grads)
 
         return grad_x, current_mlp_param_grads
+    
+    def from_dict(self, weights_dict, i):
+        self.c_proj_up.weight = weights_dict[f'block_{i}_mlp_proj_up_weight']
+        if weights_dict[f'block_{i}_mlp_proj_up_bias'] is not None:
+            self.c_proj_up.bias = weights_dict[f'block_{i}_mlp_proj_up_bias']
+        self.c_proj_dn.weight = weights_dict[f'block_{i}_mlp_proj_dn_weight']
+        if weights_dict[f'block_{i}_mlp_proj_dn_bias'] is not None:
+            self.c_proj_dn.bias = weights_dict[f'block_{i}_mlp_proj_dn_bias']
+
+        self.c_proj_up._parameters = [self.c_proj_up.weight]
+        if self.c_proj_up.bias is not None:
+            self.c_proj_up._parameters.append(self.c_proj_up.bias)
+        self.c_proj_dn._parameters = [self.c_proj_dn.weight]
+        if self.c_proj_dn.bias is not None:
+            self.c_proj_dn._parameters.append(self.c_proj_dn.bias)
+
+    def to_dict(self, weights_dict, i):
+        weights_dict[f'block_{i}_mlp_proj_up_weight'] = self.c_proj_up.weight
+        weights_dict[f'block_{i}_mlp_proj_up_bias'] = self.c_proj_up.bias if self.c_proj_up.bias is not None else None
+        weights_dict[f'block_{i}_mlp_proj_dn_weight'] = self.c_proj_dn.weight
+        weights_dict[f'block_{i}_mlp_proj_dn_bias'] = self.c_proj_dn.bias if self.c_proj_dn.bias is not None else None

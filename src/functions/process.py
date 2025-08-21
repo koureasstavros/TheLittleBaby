@@ -17,6 +17,15 @@ def gelu_prime(mp, x):
     k_prime = mt.sqrt(2/mt.pi) * (1 + 3 * 0.044715 * mp.power(x, 2))
     return 0.5 * (1 + mp.tanh(k)) + 0.5 * x * sech_sq * k_prime
 
+def sigmoid(mp, x):
+    """Compute the sigmoid activation function."""
+    return 1 / (1 + mp.exp(-x))
+
+def sigmoid_prime(mp, x):
+    """Derivative of the sigmoid function."""
+    s = 1 / (1 + mp.exp(-x))
+    return s * (1 - s)
+
 # Softmax (along given axis)
 def softmax(mp, x, axis=-1):
     """Computes softmax probabilities along a given axis for numerical stability."""

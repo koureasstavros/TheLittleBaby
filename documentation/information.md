@@ -1,5 +1,7 @@
 ## 📖 Terminology
 
+This section defines key terms used throughout the content, ensuring clarity and consistency. Whether you're new to the topic or just need a quick refresher, these definitions will help you navigate the material with confidence.
+
 🧠 **Core Concepts**
 
 **Transformer** – The backbone of most LLMs. It processes input all at once (not word-by-word) using a technique called self-attention, which helps the model understand relationships between words.
@@ -29,6 +31,10 @@
 **Mixture-of-Experts (MoE)** – is a modular architecture where different "expert" subnetworks are selectively activated per input token, often used to scale models efficiently.
 
 **Mixture Head Attention (MoH)** – is reimagined as an MoE system, where heads = experts while replaces the standard summation of heads with a weighted, token-specific selection.
+
+🧩 **Components**
+
+**Tensor** - A tensor is just a multi-dimensional array of data—like a matrix, but more general. In deep learning frameworks like PyTorch or TensorFlow, tensors are the building blocks for storing inputs, outputs, weights, and more.
 
 🔁 **Training Process**
 
@@ -65,6 +71,24 @@
 **FLOPs** (Floating Point Operations) – A measure of how much computing power is needed. More FLOPs = more expensive and slower processing. GPT-3 uses ~350 billion FLOPs per token.
 
 **Latency** – How long it takes for the model to respond. Lower latency = faster answers.
+
+
+## 💡 Explanations
+
+This section breaks down complex ideas into clear, digestible insights. It offers thoughtful interpretations and contextual background to help deepen your understanding of the concepts discussed. Whether you're exploring unfamiliar territory or refining your expertise, these explanations aim to illuminate the “why” behind the “what.”
+
+**Grad**
+
+The .grad attribute of a tensor is where the gradient is stored after backpropagation. It tells you how much a change in that tensor would affect the final output (usually the loss). Think of it as the sensitivity of the loss to that tensor.During training, we want to minimize the loss. To do that, we need to know:
+
+- Which direction to adjust each parameter (positive or negative).
+
+- How much to adjust it (the magnitude of the gradient).
+
+#### Define a simple function
+`y = x**2 + 3*x + 1`
+
+Here, the gradient of y with respect to x is dy/dx = 2x + 3, so at x = 2, the gradient is 7. That’s what gets stored in x.grad.
 
 
 ## 🧾 References

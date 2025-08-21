@@ -10,10 +10,10 @@ class Dropout(Module):
     Dropout layer.
     Randomly sets a fraction of input units to zero during training.
     """
-    def __init__(self, mp, p):
+    def __init__(self, mp, p_dropout):
         super().__init__()
         self.mp = mp
-        self.p = p # Dropout probability
+        self.p_dropout = p_dropout
 
     def forward(self, x):
         """
@@ -21,10 +21,10 @@ class Dropout(Module):
         x: input tensor
         Returns: output tensor with dropout applied (if training)
         """
-        if self.setting and self.p > 0:
+        if self.setting and self.p_dropout > 0:
             # Create a mask: True for elements to keep, False for elements to drop
             # Scale by 1/(1-p) during training (inverted dropout)
-            mask = (self.mp.random.rand(*x.shape) >= self.p) / (1.0 - self.p)
+            mask = (self.mp.random.rand(*x.shape) >= self.p_dropout) / (1.0 - self.p_dropout)
             self._cache = mask # Store mask for backward pass
             return x * mask
         self._cache = None # No mask if not training or p=0

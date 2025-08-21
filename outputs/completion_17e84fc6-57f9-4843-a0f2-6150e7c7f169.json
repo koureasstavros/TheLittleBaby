@@ -4,5 +4,5 @@
     "inference_max_tokens": 500,
     "inference_total_time": 14.959022045135498,
     "inference_cache": false,
-    "evaluation": 1
+    "evaluation": 1.4
 }

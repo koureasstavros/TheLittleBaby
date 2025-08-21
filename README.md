@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.0
+version: v0.1.1
 ---
 
 # 👶 The Little Baby
@@ -314,18 +314,21 @@ A language model architecture is a neural network design—often based on transf
 
 | Variant | Uses Q/K/V? | Complexity | Notes |
 |--------|--------------|------------|-------|
-| **MHA** (Multi-Head Attention) | ✅ Separate Q, K, V per head | **O(N²)** | Standard Transformer attention; expensive for long sequences |
-| **MOH** (Multi-Output Head) | ✅ Typically uses Q/K/V | **O(N²)** | Less common; focuses on output diversity rather than input projection |
-| **GQA** (Grouped-Query Attention) | ✅ Shared K/V per group of Q heads | **O(N²)** (less compute than MHA) | Trade-off between performance and efficiency; used in GPT-4 |
-| **MQA** (Multi-Query Attention) | ✅ Shared K/V across all heads | **O(N²)** (but lower memory) | Reduces memory by sharing K/V; used in LLaMA and PaLM |
-| **AFT** (Attention-Free Transformer) | ❌ No K/V; uses learned positional bias | **O(N)** | Removes attention entirely; uses element-wise operations and bias terms |
+| **MHA** (Multi-Head Attention) | Separate Q, K, V per head | **O(N²)** | Standard Transformer attention; expensive for long sequences |
+| **MOH** (Multi-Output Head) | Typically uses Q/K/V | **O(N²)** | Less common; focuses on output diversity rather than input projection |
+| **GQA** (Grouped-Query Attention) | Shared K/V per group of Q heads | **O(N²)** (less compute than MHA) | Trade-off between performance and efficiency; used in GPT-4 |
+| **SWH** (Sliding Window Attention) | Uses Q/K/V within local window | **O(N·w)** where *w* is window size | Limits attention to nearby tokens; efficient for long sequences |
+| **AFT** (Attention-Free Transformer) | No K/V; uses learned positional bias | **O(N)** | Removes attention entirely; uses element-wise operations and bias terms |
 
 ### 🔍 Network Variants Complexity Table
 
 | Variant | Complexity | Notes |
 |--------|------------|-------|
 | **MLP** (Multilayer Perceptron) | **O(N × D²)** | Dense feedforward layer; all inputs pass through the same network |
-| **MoE** (Mixture of Experts) | **O(K × D²)** (K ≪ N) | Sparse routing to K of N experts; improves parameter-to-compute ratio and scalability |
+| **MOE** (Mixture of Experts) | **O(K × D²)** (K ≪ N) | Sparse routing to K of N experts; improves parameter-to-compute ratio and scalability |
+| **LOR** (Low-Rank Adaptation) | **O(N × rD)** where *r* ≪ *D* | Efficient fine-tuning by injecting low-rank matrices into frozen weights |
+| **SWI** (Shifted Window Interaction) | **O(N·w)** where *w* is window size | Local windowed processing with shifted regions; avoids global attention |
+| **NFT** (Network Free Transformer) | **O(N × D)** | Attention-free mechanism that converts features into discrete tokens; useful for structured or multimodal data |
 
 
 ## 🔍 Report Analysis
@@ -334,27 +337,29 @@ Given the Shakespeare works into a single document of 32777 paragraphs, 12519 se
 
 | version | device | dataset | c_tokenizer | c_sequence | c_attention | c_network | n_ctx | n_emb | dropout | head_size | n_heads | n_layers | n_epochs | s_batch | lr | batch execution | epoch execution | train_execution | inference execution | quality execution | model size | baby's brain |
 |-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 1/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 1/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 1/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 25/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 12/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 27/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 27/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 30/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 32/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | pre | 320999s | 26s | 42/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 6.0s | 372273s | 372273s | 88s | 37/100 | 56,051,017 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 737839s | 737839s | 199s | 43/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 23/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 25/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 2 | 4 | 16 | 1e-3 | 0.30s | 30071s | 120286s | 5s | 38/100 | 3,884,379 | fda4ed80-b633-4e6e-a4a7-894a76528bd3 |
-| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 54558s | 218235s | 9s | 27/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
-| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 32 | 32 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 4s | 25/100 | 6,730,419 | 7a1459eb-5876-4c20-b56a-34a779066ae0 |
-| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 64 | 64 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 1.20s | 142492s | 142492s | 48s | 30/100 | 22,531,002 | 3ceb67f2-0363-439c-9f1a-69a90bf7fa48 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.125s | 7200s | 7200s | 8s | 1.0/100 | 29,577,062 | fb546251-ec1c-4e00-a713-765693d8c5cf |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.50s | 37355s | 37355s | 13s | 10.4/100 | 58,183,507 | c6832bb3-3f49-493d-9548-62d46065c1e0 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 8 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.5s | 41802s | 41802s | 14s | 5/100 | 117,188,617 | 33bd6583-1b87-4469-b55e-0ccb8fd0441c |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.25s | 19916s | 19916s | 14s | 1.4/100 | 29,561,884 | 17e84fc6-57f9-4843-a0f2-6150e7c7f169 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.25s | 60851s | 60851s | 14s | 21.0/100 | 56,987,898 | ecb6a3b1-ffd5-4cbd-a3e0-d9a9716dacbd |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 16 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.0s | 83749s | 83749s | 26s | 17.4/100 | 116,160,341 | 180eeb27-b1b4-4427-9734-c70e10da2005 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.5s | 53771s | 53771s | 12s | 26.2/100 | 28,310,070 | e64dd257-c048-441b-ad08-47275b22cc0b |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 97984s | 97984s | 23s | 25.8/100 | 56,292,724 | 465e5804-17af-412c-8bf6-808a34cdf617 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 32 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.0s | 134234s | 134234s | 54s | 19.4/100 | 114,114,671 | 5f13a2ab-113a-4c2c-8abd-40384bdd8854 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 2.00s | 137095s | 137095s | 39s | 25.0/100 | 28,302,412 | 0cbeae2b-2884-434d-8fdf-b8a12d8d50c4 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 3.0s | 237971s | 237971s | 45s | 25.4/100 | 56,104,284 | e65d4a59-a816-4ffa-b8ac-935db1064433 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.0s | 328598s | 328598s | 88s | 30.5/100 | 112,890,591 | cb632ce3-3f3b-432b-b24f-9171005f205e |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 4.5s | 320999s | 320999s | 26s | 33.6/100 | 28,523,148 | be5bf515-5850-41de-9072-af8faca7d27a |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 6.0s | 372273s | 372273s | 88s | 34.2/100 | 56,051,017 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.0s | 737839s | 737839s | 199s | 34.2/100 | 111,737,990 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.00s | 228208s | 228208s | 26s | 5.0/100 | 1,323,911 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.00s | 143777s | 143777s | 25s | 14.3/100 | 2,585,851 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 2 | 4 | 16 | 1e-3 | 0.30s | 30071s | 120286s | 5s | 23.2/100 | 3,884,379 | fda4ed80-b633-4e6e-a4a7-894a76528bd3 |
+| v0.0.1 | cpu | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 4 | 4 | 16 | 1e-3 | 0.60s | 54558s | 218235s | 9s | 24.9/100 | 7,367,190 | 82689609-5b39-4fd7-8a42-5d2f04dabf7a |
+| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 32 | 32 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.60s | 218232s | 218235s | 4s | 21.0/100 | 6,730,419 | 7a1459eb-5876-4c20-b56a-34a779066ae0 |
+| v0.0.1 | cpu | shakespeare | char | pre | moh | moe | 64 | 64 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 1.20s | 142492s | 142492s | 48s | 17.5/100 | 22,531,002 | 3ceb67f2-0363-439c-9f1a-69a90bf7fa48 |
+| v0.0.1 | gpu | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.20s | 35976s | 35976s | 22s | 22.1/100 | 112,003,504 | c1767e64-390e-49a8-9140-d49b4a87aec5 |
+| v0.0.1 | gpu | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.20s | 36733s | 36733s | 19s | 26.0/100 | 111,977,971 | c1767e64-390e-49a8-9140-d49b4a87aec5_finetuned |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 

@@ -1,6 +1,15 @@
 ## 📦 Changelog
 In this changelog, you can find a concise summary of all the updates made to the software—ranging from new features and performance improvements to bug fixes. It serves as a transparent record that helps users track the evolution of the software across different versions. Whether you're looking for what's new, what's changed, or what’s been resolved, the changelog is your go-to snapshot of progress.
 
+- Version v0.1.1
+  - Added expirement
+  - Fixed Naming Conventions
+  - Added c_optimizer config to choose optimizer
+  - Added Low-Rank Adaptation (lor)
+  - Added Shifted Window Interaction (swi)
+  - Added Unicode Support for inputs and outputs
+  - Abstracted Import / Export for attentions and networks
+
 - Version v0.1.0
   - Refactored code from notebook (ipynb) to python (py)
   - Added c_device config to choose between cpu and gpu
