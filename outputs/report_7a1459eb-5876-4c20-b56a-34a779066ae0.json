@@ -1,6 +1,8 @@
 {
     "num_epochs": 1,
+    "avg_train_time_per_batch": 0.2918833181912417,
     "train_batches_per_epoch": 62739,
+    "avg_val_time_per_batch": 0.12233972740315634,
     "val_batches_per_epoch": 6970,
     "average_train_loss_per_epoch": 1.6850239937933775,
     "average_val_loss_per_epoch": 1.6762364653140402,

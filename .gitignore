@@ -8,6 +8,8 @@
 /models/
 # Ignore the entire tokenizers directory
 /tokenizers/
+# Ignore the entire promos directory
+/promos/
 # Ignore the entire backups directory
 /backups/
 # Ignore the entire expirements directory
@@ -22,6 +24,8 @@
 # Ignore any other GPT Numpy json file
 /GPT *.py
 /GPT Numpy *.py
+/GPT Cupy *.py
 # Ignore any other GPT Numpy json file
 /GPT *.ipynb
 /GPT Numpy *.ipynb
+/GPT Cupy *.ipynb

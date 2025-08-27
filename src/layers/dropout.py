@@ -9,6 +9,7 @@ class Dropout(Module):
     """
     Dropout layer.
     Randomly sets a fraction of input units to zero during training.
+    It does not use trainable parameters (weights and bias).
     """
     def __init__(self, mp, p_dropout):
         super().__init__()

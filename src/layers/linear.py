@@ -6,8 +6,9 @@ from src.module import Module
 
 class Linear(Module):
     """
-    A simple Linear (fully connected) layer.
+    Linear (fully connected) layer.
     Performs y = x @ W + b.
+    It does use trainable parameters (weights and bias).
     """
     def __init__(self, mp, in_features, out_features, bias=True):
         super().__init__()

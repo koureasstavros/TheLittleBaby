@@ -1,11 +1,13 @@
 {
     "num_epochs": 1,
+    "avg_train_time_per_batch": 4.8939223902959945,
     "train_batches_per_epoch": 62737,
+    "avg_val_time_per_batch": 3.0927835820895573,
     "val_batches_per_epoch": 6968,
     "average_train_loss_per_epoch": 1.3313091050644215,
     "average_val_loss_per_epoch": 1.5274380998057029,
     "average_time_per_epoch": 328598.2809076309,
-	"total_time": 328598.2809076309,
+    "total_time": 328598.2809076309,
     "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/62737 | train_loss = 4.1761 | execution_time = 4.8925",

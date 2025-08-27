@@ -9,6 +9,7 @@ class Normalization(Module):
     """
     Layer Normalization layer.
     Normalizes features across the last dimension.
+    It does use trainable parameters (gamma and beta).
     """
     def __init__(self, mp, dims, eps=1e-5):
         super().__init__()

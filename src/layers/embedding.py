@@ -7,7 +7,7 @@ from src.module import Module
 
 class Embedding(Module):
     """
-    A simple Embedding layer.
+    Embedding layer.
     Maps integer indices to dense vectors.
     """
     def __init__(self, mp, num_embeddings, embedding_dim):

@@ -4,7 +4,7 @@
 #########################
 
 import math as mt
-from src.functions.runtime import is_debug
+from src.functions.runtime import pt_debug
 
 def gelu(mp, x):
     """Gaussian Error Linear Unit (GELU) activation function."""
@@ -16,6 +16,14 @@ def gelu_prime(mp, x):
     sech_sq = 1 / mp.cosh(k)**2 # sech^2(x) = 1 / cosh^2(x)
     k_prime = mt.sqrt(2/mt.pi) * (1 + 3 * 0.044715 * mp.power(x, 2))
     return 0.5 * (1 + mp.tanh(k)) + 0.5 * x * sech_sq * k_prime
+
+def relu(mp, x):
+    """ReLU activation function."""
+    return mp.maximum(0, x)
+
+def relu_prime(mp, x):
+    """Derivative of the ReLU activation function."""
+    return (x > 0).astype(x.dtype)
 
 def sigmoid(mp, x):
     """Compute the sigmoid activation function."""
@@ -71,19 +79,19 @@ def value_and_grad(self, x, y, use_cache):
     to compute gradients for all model parameters.
     """
     # Forward pass
-    is_debug("Start Forward pass")
+    pt_debug("Start Forward pass")
     logits = self.forward(x, use_cache)
-    is_debug("Stop Forward pass")
+    pt_debug("Stop Forward pass")
     # Compute loss and get initial gradient for logits from the loss function
-    is_debug("Start Cross entropy")
+    pt_debug("Start Cross entropy")
     loss, grad_logits = cross_entropy_loss(self.mp, logits, y)
-    is_debug("Stop Cross entropy")
+    pt_debug("Stop Cross entropy")
 
     # Backward pass: The model's backward method takes the gradient from the loss
     # and propagates it back through all layers, returning gradients for parameters.
-    is_debug("Start Backward pass")
+    pt_debug("Start Backward pass")
     _, grads = self.backward(grad_logits) # grad_input for model is None
-    is_debug("Stop Backward pass")
+    pt_debug("Stop Backward pass")
 
     return loss, grads
 
@@ -92,12 +100,12 @@ def value_and_nograd(self, x, y, use_cache):
     Performs a forward pass to compute loss
     """
     # Forward pass
-    is_debug("Start Forward pass")
+    pt_debug("Start Forward pass")
     logits = self.forward(x, use_cache)
-    is_debug("Stop Forward pass")
+    pt_debug("Stop Forward pass")
     # Compute loss from the loss function
-    is_debug("Start Cross entropy")
+    pt_debug("Start Cross entropy")
     loss, _ = cross_entropy_loss(self.mp, logits, y)
-    is_debug("Stop Cross entropy")
+    pt_debug("Stop Cross entropy")
 
     return loss, _

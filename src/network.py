@@ -8,6 +8,8 @@ from src.networks.moe import MOE
 from src.networks.swi import SWI
 from src.networks.lor import LOR
 from src.networks.nft import NFT
+from src.networks.lin import LIN
+from src.networks.ggl import GGL
 
 class Network:
     def __new__(cls, mp, c_network, n_emb, n_ctx, p_dropout):
@@ -22,5 +24,9 @@ class Network:
                 return LOR(mp, n_emb, n_emb, p_dropout, rank=4, alpha=1.0)
             case "nft":
                 return NFT(mp, n_emb, n_ctx, p_dropout, use_gate=True, clip=20.0)
+            case "lin":
+                return LIN(mp, n_emb, p_dropout, use_gate=True)
+            case "ggl":
+                return GGL(mp, n_emb, p_dropout, n_groups=4)
             case _:
                 raise ValueError(f"Unknown network type: {c_network}")

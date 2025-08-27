@@ -226,12 +226,12 @@ class NFT(Module):
         return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
-        self.q_proj.weight = weights_dict[f'block_{i}_net_nft_q_weight']
-        self.k_proj.weight = weights_dict[f'block_{i}_net_nft_k_weight']
-        self.v_proj.weight = weights_dict[f'block_{i}_net_nft_v_weight']
-        self.c_proj.weight = weights_dict[f'block_{i}_net_nft_c_weight']
-        if weights_dict.get(f'block_{i}_net_nft_c_bias') is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_net_nft_c_bias']
+        self.q_proj.weight = weights_dict[f'block_{i}_nft_q_weight']
+        self.k_proj.weight = weights_dict[f'block_{i}_nft_k_weight']
+        self.v_proj.weight = weights_dict[f'block_{i}_nft_v_weight']
+        self.c_proj.weight = weights_dict[f'block_{i}_nft_c_weight']
+        if weights_dict.get(f'block_{i}_nft_c_bias') is not None:
+            self.c_proj.bias = weights_dict[f'block_{i}_nft_c_bias']
 
         self.q_proj._parameters = [self.q_proj.weight]
         self.k_proj._parameters = [self.k_proj.weight]
@@ -241,8 +241,8 @@ class NFT(Module):
             self.c_proj._parameters.append(self.c_proj.bias)
 
     def to_dict(self, weights_dict, i):
-        weights_dict[f'block_{i}_net_nft_q_weight'] = self.q_proj.weight
-        weights_dict[f'block_{i}_net_nft_k_weight'] = self.k_proj.weight
-        weights_dict[f'block_{i}_net_nft_v_weight'] = self.v_proj.weight
-        weights_dict[f'block_{i}_net_nft_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_net_nft_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_nft_q_weight'] = self.q_proj.weight
+        weights_dict[f'block_{i}_nft_k_weight'] = self.k_proj.weight
+        weights_dict[f'block_{i}_nft_v_weight'] = self.v_proj.weight
+        weights_dict[f'block_{i}_nft_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_nft_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None

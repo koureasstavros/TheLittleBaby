@@ -28,9 +28,9 @@ class MHA(Module):
         self.d_k = d_k
 
         # Linear projections for Query, Key, Value
-        self.q_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.k_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.v_proj = Linear(mp, n_emb, head_size, bias=False)
+        self.q_proj = Linear(mp, n_emb, head_size, bias=False)  #W^Q
+        self.k_proj = Linear(mp, n_emb, head_size, bias=False)  #W^K
+        self.v_proj = Linear(mp, n_emb, head_size, bias=False)  #W^V
 
         # Output projection
         self.c_proj = Linear(mp, head_size, n_emb)
@@ -79,9 +79,9 @@ class MHA(Module):
         B, T, _ = x.shape
 
         # Project input to Q, K, V
-        Q_orig = self.q_proj.forward(x)  # (B, T, head_size)
-        K_orig = self.k_proj.forward(x)
-        V_orig = self.v_proj.forward(x)
+        Q_orig = self.q_proj.forward(x)  #Q = X * W^Q (B, T, head_size)
+        K_orig = self.k_proj.forward(x)  #K = X * W^K (B, T, head_size)
+        V_orig = self.v_proj.forward(x)  #V = X * W^V (B, T, head_size)
 
         # Helper function to split heads and transpose
         def split_heads(z):
@@ -98,7 +98,7 @@ class MHA(Module):
                 # Concatenate with cached K, V
                 K_cached, V_cached = self.kv_cache
                 K = self.mp.concatenate([K_cached, K_new], axis=2)  # Concat along sequence dimension
-                V = self.mp.concatenate([V_cached, V_new], axis=2)
+                V = self.mp.concatenate([V_cached, V_new], axis=2)  # Concat along sequence dimension
             else:
                 K = K_new
                 V = V_new

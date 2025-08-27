@@ -30,9 +30,9 @@ class MOH(Module):
         self.d_k = d_k
 
         # Standard Q,K,V
-        self.q_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.k_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.v_proj = Linear(mp, n_emb, head_size, bias=False)
+        self.q_proj = Linear(mp, n_emb, head_size, bias=False)  #W^Q
+        self.k_proj = Linear(mp, n_emb, head_size, bias=False)  #W^K
+        self.v_proj = Linear(mp, n_emb, head_size, bias=False)  #W^V
 
         # Gating: produce logits over heads per token
         self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
@@ -78,9 +78,9 @@ class MOH(Module):
         B, T, _ = x.shape
 
         # Projections
-        Q_lin = self.q_proj.forward(x)  # (B,T,head_size)
-        K_lin = self.k_proj.forward(x)
-        V_lin = self.v_proj.forward(x)
+        Q_lin = self.q_proj.forward(x)  #Q = X * W^Q (B,T,head_size)
+        K_lin = self.k_proj.forward(x)  #K = X * W^K (B,T,head_size)
+        V_lin = self.v_proj.forward(x)  #V = X * W^V (B,T,head_size)
 
         def split(z):
             return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,H,T,d_k)
@@ -144,9 +144,7 @@ class MOH(Module):
         out = self.resid_dropout.forward(m_proj_out)
 
         if self.setting:
-            self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new,
-                           scores, attn_weights, attn_weights_dropped, o,
-                           gate_logits, gate_probs, y)
+            self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, scores, attn_weights, attn_weights_dropped, o, gate_logits, gate_probs, y)
         return out
 
     def backward(self, grad_output):
@@ -154,9 +152,7 @@ class MOH(Module):
         grad_output: (B,T_q,n_emb)
         returns: grad_x, param_grads
         """
-        (x, Q_lin, K_lin, V_lin, Q, K_new, V_new,
-         scores, attn_weights, attn_weights_d, o,
-         gate_logits, gate_probs, y) = self._cache
+        (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, scores, attn_weights, attn_weights_d, o, gate_logits, gate_probs, y) = self._cache
 
         B = x.shape[0]
         T_q = grad_output.shape[1]

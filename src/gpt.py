@@ -13,8 +13,8 @@ from src.optimizer import Optimizer
 from src.layers.linear import Linear
 from src.layers.embedding import Embedding
 from src.layers.normalization import Normalization
-from src.functions.runtime import is_debug
-from src.functions.helper import load_package
+from src.functions.runtime import is_debug, pt_debug
+from src.functions.helper import load_package, get_cpu_properties, get_gpu_properties
 from src.functions.process import softmax, value_and_grad, value_and_nograd
 
 class GPT(Module):
@@ -44,9 +44,12 @@ class GPT(Module):
             if "OPENBLAS_NUM_THREADS" not in os.environ:
                 os.environ["OPENBLAS_NUM_THREADS"] = str(cpu_cores)
             if "NUMEXPR_NUM_THREADS" not in os.environ:
-                os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_cores)            
+                os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_cores)
             # Load package after environment variables are set
             import numpy as mp
+            device_name = get_cpu_properties(mp)
+            device_cores = str(cpu_cores)
+            print(f"Processor: {device_name}")
 
         elif device == "gpu":
             # Use CuPy
@@ -63,6 +66,8 @@ class GPT(Module):
                 print(f"Device {i}: {props['name']}")
             selected_core = config["c_device_gpu_core"]
             print(f"Configured GPU core id: {selected_core}")
+            device_name = get_gpu_properties(mp, selected_core)
+            device_cores = "all"
             mp.cuda.Device(int(selected_core)).use()
             mp.get_default_memory_pool().free_all_blocks()
             mp.cuda.Device().synchronize()
@@ -72,19 +77,28 @@ class GPT(Module):
     
         print(f"{'-'*10} {"Using Configuration"} {'-'*10}" )
         for key, value in config.items():
-            print(f"{key}: {value}")
+            if key != "runtime":
+                print(f"{key}: {value}")
 
         self.mp = mp
+
+        self.device_name = device_name
+        self.device_cores = device_cores
+
+        self.config_dict = None
         self.report_dict = None
         self.tokenizer_dict = None
         self.completion_dict = None
-        
+
+        # Configuration parameters
         self.c_tokenizer = config["c_tokenizer"]
         self.c_sequence = config["c_sequence"]
         self.c_attention = config["c_attention"]
         self.c_network = config["c_network"]
         self.c_optimizer = config["c_optimizer"]
 
+        # Model architecture parameters
+        self.config_dict = config
         self.n_emb = config["n_emb"]
         self.n_ctx = config["n_ctx"]
         self.p_dropout = config["dropout"]
@@ -92,15 +106,16 @@ class GPT(Module):
         self.head_size = config["head_size"]
         self.n_heads = config["n_heads"]
 
+        # Model components
         self.vocab_size = 1 # Placeholder for vocabulary size, should updated
+        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)             # Tokenizer
         self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)        # Token embeddings
         self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)             # Positional embeddings
-        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)
         self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.p_dropout, self.head_size, self.n_heads)
-                    for _ in range(self.n_layers)]               # Stack of tokenizer blocks
+                    for _ in range(self.n_layers)]                        # Stack of tokenizer blocks
         self.ln_f = Normalization(self.mp, self.n_emb)                    # Final Layer Normalization
         self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size)       # Language modeling head (output logits)
-
+        
     def parameters(self):
         """Returns all parameters of the GPT model."""
         params = []
@@ -136,9 +151,9 @@ class GPT(Module):
         Returns: logits, shape (B, T, vocab_size)
         """
         B, T = x.shape
-        is_debug("Start Forward pass through wte")
+        pt_debug("Start Forward pass through wte")
         tok_emb = self.wte.forward(x)   # (B, T, n_emb)
-        is_debug("Stop Forward pass through wte")
+        pt_debug("Stop Forward pass through wte")
         
         # For KV cache, we need to offset position indices
         if use_cache and hasattr(self, '_position_offset'):
@@ -149,9 +164,9 @@ class GPT(Module):
         else:
             pos_indices = self.mp.arange(T) % self.n_ctx # Wrap around if needed
 
-        is_debug("Start Forward pass through wpe")
+        pt_debug("Start Forward pass through wpe")
         pos_emb = self.wpe.forward(pos_indices) # (T, n_emb)
-        is_debug("Stop Forward pass through wpe")
+        pt_debug("Stop Forward pass through wpe")
         
         # Combine token and position embeddings (positional embeddings are broadcasted)
         x_combined_emb = tok_emb + pos_emb
@@ -163,16 +178,16 @@ class GPT(Module):
         # However, the Block's backward method only needs its *own* input gradient, not the full history.
         # The chain rule handles this sequentially.
         for block in self.blocks:
-            is_debug("Start Forward pass through block")
+            pt_debug("Start Forward pass through block")
             current_x = block.forward(current_x, use_cache)
-            is_debug("Stop Forward pass through block")
+            pt_debug("Stop Forward pass through block")
 
-        is_debug("Start Forward pass through final layer norm")
+        pt_debug("Start Forward pass through final layer norm")
         ln_f_out = self.ln_f.forward(current_x)
-        is_debug("Stop Forward pass through final layer norm")
-        is_debug("Start Forward pass through head")
+        pt_debug("Stop Forward pass through final layer norm")
+        pt_debug("Start Forward pass through head")
         logits = self.lm_head.forward(ln_f_out)  # (B, T, vocab_size)
-        is_debug("Stop Forward pass through head")
+        pt_debug("Stop Forward pass through head")
         
         # Update position offset for next iteration
         if use_cache:
@@ -182,7 +197,9 @@ class GPT(Module):
                 self._position_offset += T
 
         # Store intermediate values for backward pass
-        self._cache = (x_combined_emb, current_x, ln_f_out)
+        if is_debug():
+            self._cache = (x_combined_emb, current_x, ln_f_out)
+
         return logits
 
     def backward(self, grad_output):
@@ -191,21 +208,23 @@ class GPT(Module):
         grad_output: gradient from the loss function, shape (B, T, vocab_size)
         Returns: (None, list_of_param_grads) - no grad_input for the whole model.
         """
-        (x_combined_emb, current_x_before_lnf, ln_f_out) = self._cache
+        # Load cached values for backward pass
+        if is_debug():
+            (x_combined_emb, current_x_before_lnf, ln_f_out) = self._cache
 
         # Initialize an empty list to store gradients in the correct order
         # The order must match self.parameters()
         ordered_param_grads = []
 
         # 1. Backward through lm_head
-        is_debug("Start Backward pass through head")
+        pt_debug("Start Backward pass through head")
         grad_ln_f_out, lm_head_grads = self.lm_head.backward(grad_output)
-        is_debug("Stop Backward pass through head")
+        pt_debug("Stop Backward pass through head")
 
         # 2. Backward through ln_f (final Normalization)
-        is_debug("Start Backward pass through final layer norm")
+        pt_debug("Start Backward pass through final layer norm")
         grad_current_x_before_lnf, ln_f_grads = self.ln_f.backward(grad_ln_f_out)
-        is_debug("Stop Backward pass through final layer norm")
+        pt_debug("Stop Backward pass through final layer norm")
 
         # 3. Backward through blocks in reverse order
         # Need to store block gradients temporarily in correct order (forward pass order)
@@ -213,11 +232,11 @@ class GPT(Module):
         block_grads_temp = [None] * len(self.blocks) # Temporary storage for block gradients
         grad_for_prev_block = grad_current_x_before_lnf
         for i in reversed(range(len(self.blocks))):
-            is_debug("Start Backward pass through block")
+            pt_debug("Start Backward pass through block")
             block = self.blocks[i]
             grad_for_prev_block, current_block_grads = block.backward(grad_for_prev_block)
             block_grads_temp[i] = current_block_grads # Store in forward order index
-            is_debug("Stop Backward pass through block")
+            pt_debug("Stop Backward pass through block")
 
         # 4. Backward through token + position embeddings addition
         # grad_for_prev_block is now the gradient for x_combined_emb (tok_emb + pos_emb)
@@ -227,15 +246,15 @@ class GPT(Module):
 
         # 5. Backward through wte (token embeddings)
         # Embedding.backward returns (None, [grad_weight])
-        is_debug("Start Backward pass through wte")
+        pt_debug("Start Backward pass through wte")
         _, wte_grads = self.wte.backward(grad_tok_emb)
-        is_debug("Stop Backward pass through wte")
+        pt_debug("Stop Backward pass through wte")
 
         # 6. Backward through wpe (position embeddings)
         # Embedding.backward returns (None, [grad_weight])
-        is_debug("Start Backward pass through wpe")
+        pt_debug("Start Backward pass through wpe")
         _, wpe_grads = self.wpe.backward(grad_pos_emb)
-        is_debug("Stop Backward pass through wpe")
+        pt_debug("Stop Backward pass through wpe")
 
         # Now, assemble the ordered_param_grads list in the same order as self.parameters()
         ordered_param_grads.extend(wte_grads)
@@ -434,6 +453,14 @@ class GPT(Module):
     def tokenizer_to_dict(self):     
         """ Tokenizer to a JSON file. """
         return self.tokenizer_dict
+    
+    def config_to_dict(self):     
+        """ Config to a JSON file. """
+        self.config_dict["runtime"] = {
+            "model_params": self.count_parameters(),
+            "device_name": self.device_name, "device_cores": self.device_cores
+            }
+        return self.config_dict
 
     def report_to_dict(self):     
         """ Report to a JSON file. """
@@ -442,6 +469,10 @@ class GPT(Module):
     def completion_to_dict(self):     
         """ Completion to a JSON file. """
         return self.completion_dict
+    
+    def count_parameters(self):
+        """Return the total number of parameters in the model."""
+        return sum(p.size for p in self.parameters())
 
     def backup(model):
         """ Backup the model weights and configuration. """
@@ -484,6 +515,10 @@ class GPT(Module):
 
         batch_logs = []
         epoch_logs = []
+        train_batch_total_cnt = 0
+        train_batch_total_time = 0
+        val_batch_total_cnt = 0
+        val_batch_total_time = 0
         epoch_total_time = 0
         total_time = 0
 
@@ -494,6 +529,7 @@ class GPT(Module):
             # Training phase
             self.set(True) # Set model to training mode (enables dropout)
 
+            # Train Epoch Level
             running_train_loss = 0
             train_batch_cnt = 0
             train_batch_all = 0
@@ -514,15 +550,18 @@ class GPT(Module):
                     running_train_loss += loss
                     train_batch_stop_time = tm.time()  # Record stop time
                     train_batch_elapsed_time = train_batch_stop_time - train_batch_start_time
+                    train_batch_total_time += train_batch_elapsed_time
                     # Print loss for the current batch
                     batch_log = f"Epoch {epoch+1}/{n_epochs} | Batch {train_batch_cnt}/{train_batch_all} | train_loss = {loss:.4f} | execution_time = {train_batch_elapsed_time:.4f}"
                     batch_logs.append(batch_log)
                     print(batch_log)
                 avg_train_loss = running_train_loss / train_batch_cnt
+                train_batch_total_cnt += train_batch_cnt
 
             # Validation phase
             self.set(False) # Set model to evaluation mode (disables dropout)
 
+            # Val Epoch Level
             running_val_loss = 0
             val_batch_cnt = 0
             val_batch_all = 0
@@ -540,17 +579,19 @@ class GPT(Module):
                     loss, _ = value_and_nograd(self, X_batch, y_batch, train_cache)
                     running_val_loss += loss
                     val_batch_stop_time = tm.time()  # Record stop time
-                    val_batch_elapsed_time = val_batch_stop_time - val_batch_start_time  
+                    val_batch_elapsed_time = val_batch_stop_time - val_batch_start_time 
+                    val_batch_total_time += val_batch_elapsed_time
                     # Print loss for the current batch
                     batch_log = f"Epoch {epoch+1}/{n_epochs} | Batch {val_batch_cnt}/{val_batch_all} | val_loss = {loss:.4f} | execution_time = {val_batch_elapsed_time:.4f}"
                     batch_logs.append(batch_log)
                     print(batch_log)
                 avg_val_loss = running_val_loss / val_batch_cnt
+                val_batch_total_cnt += val_batch_cnt
 
             # Record stop time
             epoch_stop_time = tm.time()
 
-            # Calculate elapsed time for the epoch
+            # Epoch Level
             epoch_elapsed_time = epoch_stop_time - epoch_start_time  
             epoch_total_time += epoch_elapsed_time
 
@@ -559,6 +600,9 @@ class GPT(Module):
             epoch_logs.append(epoch_log)
             print(epoch_log)
 
+        #Total Level
+        avg_train_time_per_batch = train_batch_total_time / train_batch_total_cnt
+        avg_val_time_per_batch = val_batch_total_time / val_batch_total_cnt
         epoch_total_time_avg = epoch_total_time / n_epochs
         total_time += epoch_total_time
         print(f"Average epoch time: {epoch_total_time_avg:.4f}")        
@@ -566,7 +610,9 @@ class GPT(Module):
         # Create the report object
         report_dict = {
             "num_epochs": n_epochs,
+            "avg_train_time_per_batch": float(avg_train_time_per_batch),
             "train_batches_per_epoch": int(train_batch_all),
+            "avg_val_time_per_batch": float(avg_val_time_per_batch),
             "val_batches_per_epoch": int(val_batch_all),
             "average_train_loss_per_epoch": float(avg_train_loss),
             "average_val_loss_per_epoch": float(avg_val_loss),

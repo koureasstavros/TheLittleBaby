@@ -102,8 +102,8 @@ class LOR(Module):
         self.c_proj.weight = weights_dict[f'block_{i}_lor_c_proj_weight']
         if weights_dict.get(f'block_{i}_lor_c_proj_bias') is not None:
             self.c_proj.bias = weights_dict[f'block_{i}_lor_c_proj_bias']        
-        self.c_proj_dn.weight = weights_dict[f'block_{i}_c_proj_dn_weight']
-        self.c_proj_up.weight = weights_dict[f'block_{i}_c_proj_up_weight']
+        self.c_proj_dn.weight = weights_dict[f'block_{i}_lor_c_proj_dn_weight']
+        self.c_proj_up.weight = weights_dict[f'block_{i}_lor_c_proj_up_weight']
         self.rank = int(weights_dict[f'block_{i}_lor_rank'])
         self.alpha = float(weights_dict[f'block_{i}_lor_alpha'])
 
@@ -114,7 +114,7 @@ class LOR(Module):
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lor_c_proj_weight'] = self.c_proj.weight
         weights_dict[f'block_{i}_lor_c_proj_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
-        weights_dict[f'block_{i}_c_proj_dn_weight'] = self.c_proj_dn.weight
-        weights_dict[f'block_{i}_c_proj_up_weight'] = self.c_proj_up.weight
+        weights_dict[f'block_{i}_lor_c_proj_dn_weight'] = self.c_proj_dn.weight
+        weights_dict[f'block_{i}_lor_c_proj_up_weight'] = self.c_proj_up.weight
         weights_dict[f'block_{i}_lor_rank'] = self.rank
         weights_dict[f'block_{i}_lor_alpha'] = self.alpha

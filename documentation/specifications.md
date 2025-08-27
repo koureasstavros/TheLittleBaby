@@ -62,11 +62,11 @@
 *Do not try to relate Training Model Flops, Training Environment Training Environment Flops, Training Duration as there are other factors which are playing role, like: number of epochs, number of precision parallel efficiency, memory bandwidth, thermal limitations, etc.
 
 
-** 🖥️ GPUs **
+** 🖥️ CPUs **
 
 | CPU Model                 | Cores / Threads      | Base Speed      | Boost Speed    | Memory Bandwidth |
 |---------------------------|----------------------|-----------------|----------------|------------------|
-| Intel Core i7-1360P       | 12 (4P + 8E) / 16    | 2.2 GHz (P-core)| Up to 5.0 GHz  | 89.6 GB/s        |
+| Intel Core i7-1360P       | 12 (4P + 8E) / 16    | 2.2 GHz (P-core)| Up to 5.0 GHz  | 90 GB/s          |
 | AMD EPYC Genoa 9654       | 96 / 192             | 2.4 GHz         | Up to 3.7 GHz  | 460 GB/s         |
 | AMD EPYC 7763             | 64 / 128             | 2.45 GHz        | Up to 3.5 GHz  | 205 GB/s         |
 
