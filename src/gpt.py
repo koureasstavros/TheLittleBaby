@@ -29,7 +29,7 @@ class GPT(Module):
         device = config["c_device"]
         if device == "cpu":
             # Use NumPy
-            print(f"{'-'*10} {"Using CPU (with NumPy)"} {'-'*10}" )
+            print(f"{'-'*10} {'Using CPU (with NumPy)'} {'-'*10}" )
             load_package(["numpy"])
             system_cores = os.cpu_count()
             print(f"Detected CPU cores: {system_cores}")
@@ -53,8 +53,13 @@ class GPT(Module):
 
         elif device == "gpu":
             # Use CuPy
-            print(f"{'-'*10} {"Using GPU (with CuPy)"} {'-'*10}" )
-            load_package(["cupy"])
+            print(f"{'-'*10} {'Using GPU (with CuPy)'} {'-'*10}" )
+            if config["c_device_gpu_cuda"] == "auto":
+                load_package(["cupy"])
+            elif config["c_device_gpu_cuda"] == "cuda11":
+                load_package(["cupy-cuda11x"])
+            elif config["c_device_gpu_cuda"] == "cuda12":
+                load_package(["cupy-cuda12x"])
             os.environ["CUPY_TF32"] = config["c_device_gpu_tensor"] #[0=FP32, 1=TF32]
             os.environ["CUPY_ACCELERATORS"] = "cub,cutensor,cutensornet"
             # Load package after environment variables are set
@@ -63,7 +68,7 @@ class GPT(Module):
             print(f"Detected GPU cores: {gpu_cores}")
             for i in range(mp.cuda.runtime.getDeviceCount()):
                 props = mp.cuda.runtime.getDeviceProperties(i)
-                print(f"Device {i}: {props['name']}")
+                print(f"Device {i}: {props['name'].decode('utf-8')}")
             selected_core = config["c_device_gpu_core"]
             print(f"Configured GPU core id: {selected_core}")
             device_name = get_gpu_properties(mp, selected_core)
@@ -75,7 +80,7 @@ class GPT(Module):
         else:
             raise ValueError(f"Unsupported device type: {device}. Supported types are 'cpu' and 'gpu'.")
     
-        print(f"{'-'*10} {"Using Configuration"} {'-'*10}" )
+        print(f"{'-'*10} {'Using Configuration'} {'-'*10}" )
         for key, value in config.items():
             if key != "runtime":
                 print(f"{key}: {value}")
@@ -108,13 +113,13 @@ class GPT(Module):
 
         # Model components
         self.vocab_size = 1 # Placeholder for vocabulary size, should updated
-        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)             # Tokenizer
-        self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)        # Token embeddings
-        self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)             # Positional embeddings
+        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)                           # Tokenizer
+        self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)                      # Token embeddings
+        self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)                           # Positional embeddings
         self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.p_dropout, self.head_size, self.n_heads)
-                    for _ in range(self.n_layers)]                        # Stack of tokenizer blocks
-        self.ln_f = Normalization(self.mp, self.n_emb)                    # Final Layer Normalization
-        self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size)       # Language modeling head (output logits)
+                    for _ in range(self.n_layers)]                                      # Stack of tokenizer blocks
+        self.ln_f = Normalization(self.mp, self.n_emb)                                  # Final Layer Normalization
+        self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size, bias=True)          # Language modeling head (output logits)
         
     def parameters(self):
         """Returns all parameters of the GPT model."""
@@ -127,6 +132,29 @@ class GPT(Module):
         params += self.lm_head.parameters()
         return params
 
+    def flops(self, batch_size, training):
+        """
+        Estimate total FLOPs for the GPT model forward (and backward if training=True).
+        """
+        flops = 0
+
+        # Embedding lookups (approximate as 0 FLOPs or 1 multiply-add per element)
+        flops += batch_size * self.n_ctx * self.n_emb  # token embeddings
+        flops += batch_size * self.n_ctx * self.n_emb  # positional embeddings
+
+        # Transformer blocks
+        for block in self.blocks:
+            flops += block.flops(batch_size, training)
+
+        # Final normalization
+        norm_flops = 4 * batch_size * self.n_ctx * self.n_emb
+        flops += norm_flops
+
+        # LM head projection
+        flops += 2 * batch_size * self.n_ctx * self.n_emb * self.vocab_size
+
+        return flops
+    
     def set(self, mode=True):
         """Sets the GPT model and all its sub-modules to training/eval mode."""
         super().set(mode) # Call base Module train to set self.set
@@ -288,6 +316,9 @@ class GPT(Module):
             prompt_ids = encode_(prompt)  # Your tokenizer should return shape (1, prompt_length)
             ctx = prompt_ids # Initial context: sequence of tokens
 
+        if max_new_tokens is None:
+            max_new_tokens = 500
+            
         # Process initial prompt (if any) without cache to establish context
         if ctx.shape[1] > 0:
             input_seq = ctx[:, -self.n_ctx:]
@@ -374,16 +405,13 @@ class GPT(Module):
         self.ln_f.gamma = weights_dict['ln_f_gamma']
         self.ln_f.beta = weights_dict['ln_f_beta']
         self.lm_head.weight = weights_dict['lm_head_weight']
-        if weights_dict['lm_head_bias'] is not None:
-            self.lm_head.bias = weights_dict['lm_head_bias']
+        self.lm_head.bias = weights_dict['lm_head_bias']
 
         # Update the main model's top-level _parameters
-        self.wte._parameters = [self.wte.weight]
-        self.wpe._parameters = [self.wpe.weight]
-        self.ln_f._parameters = [self.ln_f.gamma, self.ln_f.beta]
-        self.lm_head._parameters = [self.lm_head.weight]
-        if self.lm_head.bias is not None:
-            self.lm_head._parameters.append(self.lm_head.bias)
+        self.wte.synchronize()
+        self.wpe.synchronize()
+        self.ln_f.synchronize()
+        self.lm_head.synchronize()
         
         # Restore block weights
         for i, block in enumerate(self.blocks):
@@ -407,19 +435,19 @@ class GPT(Module):
         """ Model parameters to a JSON file. """
 
         # Extract all weight arrays from the model
-        weights_dict = {
-            # Token and position embeddings
-            'wte_weight': self.wte.weight,
-            'wpe_weight': self.wpe.weight,
-            
-            # Final layer norm
-            'ln_f_gamma': self.ln_f.gamma,
-            'ln_f_beta': self.ln_f.beta,
-            
-            # Language model head
-            'lm_head_weight': self.lm_head.weight,
-            'lm_head_bias': self.lm_head.bias if self.lm_head.bias is not None else None,
-        }
+        weights_dict = { }
+        
+        # Token and position embeddings
+        weights_dict['wte_weight'] = self.wte.weight
+        weights_dict['wpe_weight'] = self.wpe.weight
+
+        # Final layer norm
+        weights_dict['ln_f_gamma'] = self.ln_f.gamma
+        weights_dict['ln_f_beta'] = self.ln_f.beta
+
+        # Language model head
+        weights_dict['lm_head_weight'] = self.lm_head.weight
+        weights_dict['lm_head_bias'] = self.lm_head.bias
         
         # Add block parameters
         for i, block in enumerate(self.blocks):
@@ -488,7 +516,7 @@ class GPT(Module):
 
     def train(self, input_text, train_cache, n_epochs, batch_size, lr):
         """ Train the GPT model on the provided input data. """
-        print(f"{'-'*10} {"Training in progress"} {'-'*10}" )
+        print(f"{'-'*10} {'Training in progress'} {'-'*10}" )
 
         # Tokenize the input data
         train_data, val_data = self.tokenizer.tokenize(input_text)        
@@ -626,9 +654,9 @@ class GPT(Module):
         # Save the report to JSON
         self.report_dict = report_dict
 
-    def inference(self, prompt, infer_cache):
+    def inference(self, prompt, infer_cache, max_tokens):
         """ Perform inference with the trained model using a given prompt. """
-        print(f"{'-'*10} {"Infrerence in progress"} {'-'*10}" )
+        print(f"{'-'*10} {'Infrerence in progress'} {'-'*10}" )
 
         # Update vocab size
         self.vocab_size = self.tokenizer.vocab_size  # Update model vocabulary size from tokenizer
@@ -644,8 +672,8 @@ class GPT(Module):
         # Initialize the total inference time
         inference_total_time = 0
 
-        # Generate 500 new tokens
-        inference_max_tokens = 500
+        # Generate new tokens
+        inference_max_tokens = max_tokens
 
         # Record start time
         inference_start_time = tm.time()

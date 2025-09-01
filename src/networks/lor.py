@@ -17,9 +17,10 @@ class LOR(Module):
         r is the rank,
         alpha is a scaling factor.
     """
-    def __init__(self, mp, n_emb, n_out, p_dropout, rank=4, alpha=1.0):
+    def __init__(self, mp, n_ctx, n_emb, n_out, p_dropout, rank=4, alpha=1.0):
         super().__init__()
         self.mp = mp
+        self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.n_out = n_out
         self.rank = rank
@@ -40,6 +41,31 @@ class LOR(Module):
     def parameters(self):
         """Return only trainable LoRA parameters (A and B)."""
         return self.c_proj_dn.parameters() + self.c_proj_up.parameters()
+
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the LoRA forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
+
+        flops = 0
+
+        # Base frozen projection (still computed)
+        flops += linear_flops(self.n_emb, self.n_out)
+
+        # LoRA down projection (A)
+        flops += linear_flops(self.n_emb, self.rank)
+
+        # LoRA up projection (B)
+        flops += linear_flops(self.rank, self.n_out)
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
 
     def set(self, mode=True):
         """Set mode for LoRA adapters and dropout (base_proj stays frozen)."""
@@ -100,20 +126,19 @@ class LOR(Module):
     
     def from_dict(self, weights_dict, i):
         self.c_proj.weight = weights_dict[f'block_{i}_lor_c_proj_weight']
-        if weights_dict.get(f'block_{i}_lor_c_proj_bias') is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_lor_c_proj_bias']        
+        self.c_proj.bias = weights_dict[f'block_{i}_lor_c_proj_bias']        
         self.c_proj_dn.weight = weights_dict[f'block_{i}_lor_c_proj_dn_weight']
         self.c_proj_up.weight = weights_dict[f'block_{i}_lor_c_proj_up_weight']
         self.rank = int(weights_dict[f'block_{i}_lor_rank'])
         self.alpha = float(weights_dict[f'block_{i}_lor_alpha'])
 
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.c_proj.synchronize()
+        self.c_proj_dn.synchronize()
+        self.c_proj_up.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lor_c_proj_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_lor_c_proj_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_lor_c_proj_bias'] = self.c_proj.bias
         weights_dict[f'block_{i}_lor_c_proj_dn_weight'] = self.c_proj_dn.weight
         weights_dict[f'block_{i}_lor_c_proj_up_weight'] = self.c_proj_up.weight
         weights_dict[f'block_{i}_lor_rank'] = self.rank

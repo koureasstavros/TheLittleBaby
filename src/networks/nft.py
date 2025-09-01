@@ -23,11 +23,11 @@ class NFT(Module):
 
     Params order preserved: q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout, use_gate, clip):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, use_gate, clip):
         super().__init__()
         self.mp = mp
-        self.n_emb = n_emb
         self.n_ctx = n_ctx
+        self.n_emb = n_emb
         self.use_gate = bool(use_gate)
         self.clip = float(clip)
 
@@ -35,8 +35,9 @@ class NFT(Module):
         self.q_proj = Linear(mp, n_emb, n_emb, bias=False) # used only if use_gate=True
         self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
         self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb)
+        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
 
+        # Dropout layers
         self.attn_dropout = Dropout(mp, p_dropout)
         self.resid_dropout = Dropout(mp, p_dropout)
 
@@ -51,6 +52,48 @@ class NFT(Module):
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the NFT forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
+
+        flops = 0
+
+        # q_proj only if gating is used
+        if self.use_gate:
+            flops += linear_flops(self.n_emb, self.n_emb)
+
+        # k_proj and v_proj
+        flops += linear_flops(self.n_emb, self.n_emb)  # k_proj
+        flops += linear_flops(self.n_emb, self.n_emb)  # v_proj
+
+        # exp/clip and elementwise mul for E and EV (~2 FLOPs per element each)
+        flops += 2 * batch_size * self.n_ctx * self.n_emb  # exp/clip
+        flops += 2 * batch_size * self.n_ctx * self.n_emb  # E * V
+
+        # cumsum for S and SV (~1 FLOP per element each)
+        flops += batch_size * self.n_ctx * self.n_emb * 2
+
+        # division for s = SV / (S + eps)
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        # gating multiply if used
+        if self.use_gate:
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        # c_proj
+        flops += linear_flops(self.n_emb, self.n_emb)
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
 
     def set(self, mode=True):
         super().set(mode)
@@ -230,19 +273,16 @@ class NFT(Module):
         self.k_proj.weight = weights_dict[f'block_{i}_nft_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_nft_v_weight']
         self.c_proj.weight = weights_dict[f'block_{i}_nft_c_weight']
-        if weights_dict.get(f'block_{i}_nft_c_bias') is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_nft_c_bias']
+        self.c_proj.bias = weights_dict[f'block_{i}_nft_c_bias']
 
-        self.q_proj._parameters = [self.q_proj.weight]
-        self.k_proj._parameters = [self.k_proj.weight]
-        self.v_proj._parameters = [self.v_proj.weight]
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.q_proj.synchronize()
+        self.k_proj.synchronize()
+        self.v_proj.synchronize()
+        self.c_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_nft_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_nft_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_nft_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_nft_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_nft_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_nft_c_bias'] = self.c_proj.bias

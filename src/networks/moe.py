@@ -14,9 +14,10 @@ class MOE(Module):
     y = sum_e softmax(gate(x))_e * Expert_e(x)
     Each Expert_e: Linear_up -> GELU -> Linear_down -> Dropout
     """
-    def __init__(self, mp, n_emb, p_dropout, n_expansion, n_experts):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, n_expansion, n_experts):
         super().__init__()
         self.mp = mp
+        self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.n_expansion = n_expansion
         self.n_experts = n_experts
@@ -25,9 +26,10 @@ class MOE(Module):
         self.g_proj = Linear(mp, n_emb, n_experts, bias=False)
 
         # Experts: separate parameter sets
-        self.c_proj_up = [Linear(mp, n_emb, n_expansion * n_emb) for _ in range(n_experts)]
-        self.c_proj_dn = [Linear(mp, n_expansion * n_emb, n_emb) for _ in range(n_experts)]
+        self.c_proj_up = [Linear(mp, n_emb, n_expansion * n_emb, bias=True) for _ in range(n_experts)]
+        self.c_proj_dn = [Linear(mp, n_expansion * n_emb, n_emb, bias=True) for _ in range(n_experts)]
 
+        # Dropout layer
         self.p_dropout = Dropout(mp, p_dropout)
 
     def parameters(self):
@@ -36,6 +38,36 @@ class MOE(Module):
             params += u.parameters()
             params += d.parameters()
         return params
+
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the dense MOE forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
+
+        flops = 0
+
+        # 1. Gating projection: (B, T, n_emb) -> (B, T, n_experts)
+        flops += linear_flops(self.n_emb, self.n_experts)
+
+        # 2. Experts (dense: compute all experts)
+        hidden_size = self.n_expansion * self.n_emb
+        for _ in range(self.n_experts):
+            # Up projection
+            flops += linear_flops(self.n_emb, hidden_size)
+            # GELU activation (~4 FLOPs per element)
+            flops += 4 * batch_size * self.n_ctx * hidden_size
+            # Down projection
+            flops += linear_flops(hidden_size, self.n_emb)
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
 
     def set(self, mode=True):
         super().set(mode)
@@ -134,37 +166,26 @@ class MOE(Module):
         return grad_x_total, param_grads
     
     def from_dict(self, weights_dict, i):
-        self.g_proj.weight = weights_dict[f'block_{i}_moe_g_weight']
-        if weights_dict[f'block_{i}_moe_g_bias'] is not None:
-            self.g_proj.bias = weights_dict[f'block_{i}_moe_g_bias']
+        self.g_proj.weight = weights_dict[f'block_{i}_moe_g_weight']        
         self.n_expansion = int(weights_dict[f'block_{i}_moe_n_expansion'])
         self.n_experts = int(weights_dict[f'block_{i}_moe_n_experts'])
         for expert_idx in range(self.n_experts):
             self.c_proj_up[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight']
-            if weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] is not None:
-                self.c_proj_up[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias']
+            self.c_proj_up[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias']
             self.c_proj_dn[expert_idx].weight = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight']
-            if weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] is not None:
-                self.c_proj_dn[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias']
+            self.c_proj_dn[expert_idx].bias = weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias']
 
-        self.g_proj._parameters = [self.g_proj.weight]
-        if self.g_proj.bias is not None:
-            self.g_proj._parameters.append(self.g_proj.bias)
+        self.g_proj.synchronize()        
         for expert_idx in range(self.n_experts):
-            self.c_proj_up[expert_idx]._parameters = [self.c_proj_up[expert_idx].weight]
-            if self.c_proj_up[expert_idx].bias is not None:
-                self.c_proj_up[expert_idx]._parameters.append(self.c_proj_up[expert_idx].bias)
-            self.c_proj_dn[expert_idx]._parameters = [self.c_proj_dn[expert_idx].weight]
-            if self.c_proj_dn[expert_idx].bias is not None:
-                self.c_proj_dn[expert_idx]._parameters.append(self.c_proj_dn[expert_idx].bias)
+            self.c_proj_up[expert_idx].synchronize()
+            self.c_proj_dn[expert_idx].synchronize()
 
     def to_dict(self, weights_dict, i):
-        weights_dict[f'block_{i}_moe_g_weight'] = self.g_proj.weight
-        weights_dict[f'block_{i}_moe_g_bias'] = self.g_proj.bias if self.g_proj.bias is not None else None
+        weights_dict[f'block_{i}_moe_g_weight'] = self.g_proj.weight        
         weights_dict[f'block_{i}_moe_n_expansion'] = self.n_expansion
         weights_dict[f'block_{i}_moe_n_experts'] = self.n_experts
         for expert_idx in range(self.n_experts):
             weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_weight'] = self.c_proj_up[expert_idx].weight
-            weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] = self.c_proj_up[expert_idx].bias if self.c_proj_up[expert_idx].bias is not None else None
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_up_bias'] = self.c_proj_up[expert_idx].bias
             weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_weight'] = self.c_proj_dn[expert_idx].weight
-            weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] = self.c_proj_dn[expert_idx].bias if self.c_proj_dn[expert_idx].bias is not None else None
+            weights_dict[f'block_{i}_moe_expert_{expert_idx}_dn_bias'] = self.c_proj_dn[expert_idx].bias

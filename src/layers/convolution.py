@@ -18,7 +18,12 @@ class DepthwiseConv1D(Module):
         self.kernel_size = kernel_size
         self.weight = mp.random.randn(channels, kernel_size) / mp.sqrt(channels)
         self.bias = mp.zeros(channels)
-        self._parameters.extend([self.weight, self.bias])
+        self.synchronize()
+
+    def synchronize(self):
+        self._parameters = [self.weight]
+        if self.bias is not None:
+            self._parameters.append(self.bias)
 
     def forward(self, x):
         B, T, D = x.shape

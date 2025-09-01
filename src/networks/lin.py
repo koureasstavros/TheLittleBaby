@@ -15,22 +15,23 @@ class LIN(Module):
     - Complexity: O(B·T·D)
     Params order: c_proj
     """
-    def __init__(self, mp, n_emb, p_dropout, use_gate):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, use_gate):
         super().__init__()
         self.mp = mp
+        self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.use_gate = use_gate
 
         # Main projection
-        self.c_proj = Linear(mp, n_emb, n_emb)
+        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
 
         # Optional gate projection
         if use_gate:
-            self.g_proj = Linear(mp, n_emb, n_emb)
+            self.g_proj = Linear(mp, n_emb, n_emb, bias=True)
         else:
             self.g_proj = None
 
-        # Dropout
+        # Dropout layer
         self.p_dropout = Dropout(mp, p_dropout)
 
     def parameters(self):
@@ -38,7 +39,34 @@ class LIN(Module):
             return self.c_proj.parameters() + self.g_proj.parameters()
         else:
             return self.c_proj.parameters()
+        
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the LIN forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
 
+        flops = 0
+
+        # Main projection
+        flops += linear_flops(self.n_emb, self.n_emb)
+
+        if self.use_gate:
+            # Gate projection
+            flops += linear_flops(self.n_emb, self.n_emb)
+            # Sigmoid activation (~4 FLOPs per element)
+            flops += 4 * batch_size * self.n_ctx * self.n_emb
+            # Elementwise multiply with main projection
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+    
     def set(self, mode=True):
         super().set(mode)
         self.c_proj.set(mode)
@@ -81,24 +109,18 @@ class LIN(Module):
 
     def from_dict(self, weights_dict, i):
         self.c_proj.weight = weights_dict[f'block_{i}_lin_c_weight']
-        if weights_dict[f'block_{i}_lin_c_bias'] is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_lin_c_bias']
+        self.c_proj.bias = weights_dict[f'block_{i}_lin_c_bias']
         if self.use_gate:
             self.g_proj.weight = weights_dict[f'block_{i}_lin_g_weight']
-            if weights_dict[f'block_{i}_lin_g_bias'] is not None:
-                self.g_proj.bias = weights_dict[f'block_{i}_lin_g_bias']
+            self.g_proj.bias = weights_dict[f'block_{i}_lin_g_bias']
 
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.c_proj.synchronize()        
         if self.use_gate:
-            self.g_proj._parameters = [self.g_proj.weight]
-            if self.g_proj.bias is not None:
-                self.g_proj._parameters.append(self.g_proj.bias)
+            self.g_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lin_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_lin_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_lin_c_bias'] = self.c_proj.bias
         if self.use_gate:
             weights_dict[f'block_{i}_lin_g_weight'] = self.g_proj.weight
-            weights_dict[f'block_{i}_lin_g_bias'] = self.g_proj.bias if self.g_proj.bias is not None else None
+            weights_dict[f'block_{i}_lin_g_bias'] = self.g_proj.bias

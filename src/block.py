@@ -21,9 +21,9 @@ class Block(Module):
         self.c_network = c_network  # "mlp" or "moe"
 
         self.ln_1 = Normalization(mp, n_emb)
-        self.att = Attention(mp, c_attention, n_emb, n_ctx, p_dropout, head_size, n_heads)
+        self.att = Attention(mp, c_attention, n_ctx, n_emb, p_dropout, head_size, n_heads)
         self.ln_2 = Normalization(mp, n_emb)
-        self.net = Network(mp, c_network, n_emb, n_ctx, p_dropout)
+        self.net = Network(mp, c_network, n_ctx, n_emb, p_dropout)
 
     def parameters(self):
         """Returns all parameters of the Transformer Block."""
@@ -31,7 +31,23 @@ class Block(Module):
                 self.att.parameters() +
                 self.ln_2.parameters() +
                 self.net.parameters())
+    
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for this Transformer Block.
+        Includes normalization, attention, and network.
+        """
+        flops = 0
 
+        # Normalization FLOPs ~ 2 * n_emb per token (mean + variance + scale + shift)
+        norm_flops = 4 * batch_size * self.att.n_ctx * self.att.n_emb
+        flops += norm_flops  # ln_1
+        flops += self.att.flops(batch_size, training)
+        flops += norm_flops  # ln_2
+        flops += self.net.flops(batch_size, training)
+
+        return flops
+    
     def set(self, mode=True):
         """Sets the block and its sub-modules to training/eval mode."""
         super().set(mode)

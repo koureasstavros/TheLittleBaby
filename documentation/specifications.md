@@ -64,23 +64,23 @@
 
 ** 🖥️ CPUs **
 
-| CPU Model                 | Cores / Threads      | Base Speed      | Boost Speed    | Memory Bandwidth |
-|---------------------------|----------------------|-----------------|----------------|------------------|
-| Intel Core i7-1360P       | 12 (4P + 8E) / 16    | 2.2 GHz (P-core)| Up to 5.0 GHz  | 90 GB/s          |
-| AMD EPYC Genoa 9654       | 96 / 192             | 2.4 GHz         | Up to 3.7 GHz  | 460 GB/s         |
-| AMD EPYC 7763             | 64 / 128             | 2.45 GHz        | Up to 3.5 GHz  | 205 GB/s         |
+| CPU Model                 | Cores / Threads      | Base Speed      | Boost Speed    | Bandwidth      | Flops/s (FP32)   |
+|---------------------------|----------------------|-----------------|----------------|----------------|----------------|
+| Intel Core i7-1360P       | 12 (4P + 8E) / 16    | 2.2 GHz (P-core)| Up to 5.0 GHz  | 90 GB/s        | ~1.3 TFLOPS    |
+| AMD EPYC 7763             | 64 / 128             | 2.45 GHz        | Up to 3.5 GHz  | 205 GB/s       | ~5.0 TFLOPS    |
+| AMD EPYC Genoa 9654       | 96 / 192             | 2.4 GHz         | Up to 3.7 GHz  | 460 GB/s       | ~7.1 TFLOPS    |
 
 
 ** 🎨 GPUs **
 
-| GPU Model                | Cores     | Core Speed              | Memory Type | Memory Size | Memory Speed              | Bandwidth   |
-|--------------------------|-----------|-------------------------|-------------|-------------|---------------------------|-------------|
-| RTX A500 Laptop GPU      | 2048      | 1440 MHz (1770 MHz)     | GDDR6       | 4 GB        | 1750 MHz (14 Gbps)        | 112 GB/s    |
-| NVIDIA Tesla T4          | 2560      | 585 MHz (1590 MHz)      | GDDR6       | 16 GB       | 1250 MHz (10 Gbps)        | 320 GB/s    |
-| NVIDIA Tesla V710 GPU    | 3456      | 1900 MHz (2000 MHz)     | GDDR6       | 28 GB       | 2250 MHz (18 Gbps)        | 504 GB/s    |
-| NVIDIA Tesla P100        | 3584      | 1190 MHz (1329 MHz)     | HBM2        | 16 GB       | 715 MHz                   | 732 GB/s    |
-| AMD Radeon Instinct MI25 | 4096      | 1400 MHz (1500 MHz)     | HBM2        | 16 GB       | 852 MHz                   | 436 GB/s    |
-| NVIDIA Tesla M60         | 2048 ×2   | 557 MHz (1178 MHz)      | GDDR5       | 8 GB ×2     | 1253 MHz (5 Gbps)         | 256 GB/s ×2 |
-| NVIDIA Tesla K80         | 2496 ×2   | 562 MHz (824 MHz)       | GDDR5       | 12 GB ×2    | 1253 MHz (5 Gbps)         | 480 GB/s    |
-| NVIDIA Tesla V100        | 5120      | 1245 MHz (1380 MHz)     | HBM2        | 16 GB       | 876 MHz                   | 900 GB/s    |
-| NVIDIA A10               | 9216      | 885 MHz (1695 MHz)      | GDDR6       | 24 GB       | 1563 MHz (12.5 Gbps)      | 600 GB/s    |
+| GPU Model                | Cores     | Core Speed              | Memory Type | Memory Size | Memory Speed              | Bandwidth      | Flops/s (FP32) |
+|--------------------------|-----------|-------------------------|-------------|-------------|---------------------------|----------------|----------------|
+| NVIDIA Tesla M60         | 2048 ×2   | 557 MHz (1178 MHz)      | GDDR5       | 8 GB ×2     | 1253 MHz (5 Gbps)         | 256 GB/s ×2    | ~6.0 TFLOPS    |
+| RTX A500 Laptop GPU      | 2048      | 1440 MHz (1770 MHz)     | GDDR6       | 4 GB        | 1750 MHz (14 Gbps)        | 112 GB/s       | ~7.2 TFLOPS    |
+| NVIDIA Tesla T4          | 2560      | 585 MHz (1590 MHz)      | GDDR6       | 16 GB       | 1250 MHz (10 Gbps)        | 320 GB/s       | ~8.1 TFLOPS    |
+| NVIDIA Tesla K80         | 2496 ×2   | 562 MHz (824 MHz)       | GDDR5       | 12 GB ×2    | 1253 MHz (5 Gbps)         | 480 GB/s       | ~8.7 TFLOPS    |
+| NVIDIA Tesla P100        | 3584      | 1190 MHz (1329 MHz)     | HBM2        | 16 GB       | 715 MHz                   | 732 GB/s       | ~9.3 TFLOPS    |
+| AMD Radeon Instinct MI25 | 4096      | 1400 MHz (1500 MHz)     | HBM2        | 16 GB       | 852 MHz                   | 436 GB/s       | ~12.3 TFLOPS   |
+| NVIDIA Tesla V710 GPU    | 3456      | 1900 MHz (2000 MHz)     | GDDR6       | 28 GB       | 2250 MHz (18 Gbps)        | 504 GB/s       | ~13.8 TFLOPS   |
+| NVIDIA Tesla V100        | 5120      | 1245 MHz (1380 MHz)     | HBM2        | 16 GB       | 876 MHz                   | 900 GB/s       | ~14.1 TFLOPS   |
+| NVIDIA A10               | 9216      | 885 MHz (1695 MHz)      | GDDR6       | 24 GB       | 1563 MHz (12.5 Gbps)      | 600 GB/s       | ~31.2 TFLOPS   |

@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.2
+version: v0.1.3
 ---
 
 # 👶 The Little Baby
@@ -53,26 +53,26 @@ This endeavor is structured around key targets designed to deliver meaningful ou
 
 ## 📚 Directory Files
 
-Each run generates three unique files, identified by a GUID tag. These files capture different aspects of the model's execution:
+Each run generates some unique files, identified by a GUID tag. These files capture different aspects of the model's execution:
 
-- **⚙️ Config**  
-  `configs/config_<GUID>.txt`  
+- **⚙️ Config Snapshot**  
+  `configs/config_<GUID>.json`  
   A config file containing the configuration of the each iteration.
 
-- **📝 Report**  
-  `outputs/report_<GUID>.txt`  
-  A comprehensive log containing training analysis, and performance metrics.
-
 - **🧠 Model Snapshot**  
-  `models/model_<GUID>.pkl`  
+  `models/model_<GUID>.json`  
   Model object including learned weights, biases, which are the internal parameters.
 
 - **🔤 Tokenizer Snapshot**  
-  `tokenizers/tokenizer_<GUID>.pkl`  
+  `tokenizers/tokenizer_<GUID>.json`  
   Tokenizer object including vocabilary of the input data and their positioning.
 
+- **📝 Report Output**  
+  `outputs/report_<GUID>.json`  
+  A comprehensive log containing training analysis, and performance metrics.
+
 - **🗣️ Completion Output**  
-  `outputs/completion_<GUID>.txt`  
+  `outputs/completion_<GUID>.json`  
   The raw generated text from the model's inference — your baby’s words in print!
 
 
@@ -133,9 +133,17 @@ To get started with this project, clone the code, download the tokenizers abd pr
     - place the tokenizer file or tokenizer files into the tokenizers folder.
     - place the model file or model files into the models folder.
 
+**Configure Environment**
+  - Based on the environment different posibilities and features are available
+    - If you are running localhost then you can choose to process on CPU or GPU
+      - If you select gpu make sure that you know if your system supports cuda or tensor
+    - If you are running on a cloud provider you need to know certain things
+      - If you select Google Colab with GPU, make sure that you specify the proper cuda version based on selected gpu, because Google Colab seems that cannot build of wheels for gpu because it does not exposes the nvcc and therefore if you keep cuda version to auto it will hung.
+      - If you select Kaggle with GPU, make sure that you specify the proper cuda version on selected gpu, because it will take realy lot of time to build wheels with cuda version auto, in addition there is different path for reading uploaded files with read only permission and different path for output files that has write permission.
+
 **Start the Notebook**
-    - Open the `.ipynb` file in a Python kernel (e.g. Jupyter, VS Code, Colab).
-      - Run all cells in the notebook
+  - Open the `.ipynb` file in a Python kernel (e.g. Jupyter, VS Code, Colab).
+    - Run all cells in the notebook
 
 **Select Path**
   - Choose the relative path between ipynb and folders:
@@ -144,7 +152,7 @@ To get started with this project, clone the code, download the tokenizers abd pr
 
 **Select Plan**
   - Choose one of the following plan modes:
-    - `train`, to train a new model
+    - `train`, to train a new model (based on settings file)
     - `finetune`, to finetune a pre-trained model
     - `inference`, to inference using a pre-trained model
     - `delete`, to delete all relative files of a pretrained model
@@ -174,9 +182,17 @@ In Baby's world, each option has its own little job—and below, you’ll discov
 - A completion file containing the generation will be generated with format `completion_<guid>_finetuned` using an empty prompt.
 
 #### 💬 Inference
-- Requires the **GUID** of the trained model to find the `model_<guid>`.
-- You must also provide a **prompt** for the model inference to respond to.
-- A completion file containing the generation will be generated with format `complation_<guid>_<yyyymmddhhmmss>` using the prompt.
+- Requires the **GUID** of the trained model to find the `config_<guid>`, `tokenizer_<guid>` and `model_<guid>`.
+- You must also provide a **prompt** for the model inference to respond to, if not leave empty to continue on trained text.
+- A completion file containing the generation will be generated with format `completion_<guid>_<yyyymmddhhmmss>` using the prompt.
+
+#### 🗑️ Delete
+- Requires the **GUID** of the trained model to find the `config_<guid>`, `tokenizer_<guid>` and `model_<guid>`.
+- The files `config_<guid>`, `tokenizer_<guid>`, `model_<guid>`, `report_<guid>`, `complation_<guid>` will be deleted
+
+#### ℹ️ Info
+- Requires the **GUID** of the trained model to find the `config_<guid>`, `tokenizer_<guid>` and `model_<guid>`.
+- An output with information will be provided.
 
 After lot of hours of training on a single document of multiple Shakespeare works using a **laptop CPU**, The Little Baby learns to babble. Its speech is primitive and childlike — just enough to make you smile and realize… the baby is alive. While its capabilities are minimal, its structure is maximal in transparency. Every token, gradient, and parameter is visible and malleable.
 
@@ -437,7 +453,7 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 64 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 4.89s | 328598s | 328598s | 88s | 30.5/100 | 112,890,591 | 3199553 | cb632ce3-3f3b-432b-b24f-9171005f205e |
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 5.11s | 320999s | 320999s | 26s | 33.6/100 | 28,523,148 | 824897 | be5bf515-5850-41de-9072-af8faca7d27a |
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 4.83s | 372273s | 372273s | 88s | 34.2/100 | 56,051,017 | 1616449 | 868be641-a21a-4c5f-8916-2dfc4c92f5e9 |
-| v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.80 | 737839s | 737839s | 199s | 34.2/100 | 111,737,990 | 3199553 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
+| v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 10.80s | 737839s | 737839s | 199s | 34.2/100 | 111,737,990 | 3199553 | 12b8b053-6c14-42aa-a957-89b809e6f785 |
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 256 | 32 | 0.1 | 32 | 16 | 2 | 1 | 16 | 1e-3 | 3.45s | 228208s | 228208s | 26s | 5.0/100 | 1,323,911 | 37697 | b3aedc6d-da9a-4398-b067-faeca1afc6da |
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 256 | 64 | 0.1 | 64 | 16 | 1 | 1 | 16 | 1e-3 | 2.15s | 143777s | 143777s | 25s | 14.3/100 | 2,585,851 | 74689 | 652d3409-24a5-4057-b482-9fd9e32fc484 |
 | v0.0.1 | cpu | 13th Gen Intel(R) Core(TM) i7-1360P | shakespeare | char | pre | mha | mlp | 64 | 64 | 0.1 | 64 | 16 | 2 | 4 | 16 | 1e-3 | 0.44s | 30071s | 120286s | 5s | 23.2/100 | 3,884,379 | 112193 | fda4ed80-b633-4e6e-a4a7-894a76528bd3 |
@@ -456,7 +472,7 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.70s | 11578s | 11578s | 10s | 31.7/100 | 56,362,462 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.72s | 11965s | 11965s | 29s | 29.8/100 | 56,531,116 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 35976s | 35976s | 22s | 22.1/100 | 112,003,504 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5 |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 36733s | 36733s | 19s | 26.0/100 | 111,977,971 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 36733s | 36733s | 19s | 40.5/100 | 111,977,971 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.15s | 3471s | 3471s | 10s | 9.0/100 | 9,741,653 | 212579 | baa3da3a-353f-40f5-9e02-f44fb406e05c |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.15s | 3411s | 3411s | 7s | 19.1/100 | 9,725,614 | 212579 | baa3da3a-353f-40f5-9e02-f44fb406e05c_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.41s | 6917s | 6917s | 12s | 17.1/100 | 18,030,110 | 383075 | 16915fef-a3db-4749-9f0f-c17987fd3aa1 |
@@ -475,6 +491,12 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.22s | 3515s | 3515s | 11s | 6.2/100 | 24,517,655 | 715875 | 88673f38-f950-42b2-a2aa-b365e7b53e69_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.46s | 7570s | 7570s | 18s | 5.0/100 | 50,456,101 | 1389667 | 84a9d1c0-ba94-4244-b64e-c7fbaf101671 |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.44s | 7250s | 7250s | 18s | 5.0/100 | 46,811,224 | 1389667 | 84a9d1c0-ba94-4244-b64e-c7fbaf101671_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.75s | 12442s | 12442s | 9s | 31.4/100 | 81,998,967 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.76s | 12536s | 12536s | 22s | 22.7/100 | 81,799,112 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.59s | 26267s | 26267s | 26s | 36.7/100 | 162,674,522 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.64s | 27285s | 27285s | 20s | 33.6/100 | 162,413,666 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.68s | 95355s | 95355s | 61s | 42.3/100 | 324,685,161 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.18s | 103253s | 103253s | 57s | 49.4/100 | 324,595,702 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662_finetuned |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 

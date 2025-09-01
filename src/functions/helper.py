@@ -7,10 +7,6 @@ import os
 import sys
 import importlib
 import subprocess
-from dotenv import load_dotenv
-
-def load_environment():
-    load_dotenv(override=True)
 
 def load_package(packages_needed):
     installed_packages = {dist.metadata['Name'].lower() for dist in importlib.metadata.distributions()}
@@ -41,4 +37,4 @@ def get_cpu_properties(mp):
 
 def get_gpu_properties(mp, selected_core):
     if mp.cuda.runtime.getDeviceCount() > 0:
-        return str(mp.cuda.runtime.getDeviceProperties(int(selected_core))["name"])
+        return str(mp.cuda.runtime.getDeviceProperties(int(selected_core))["name"].decode("utf-8"))

@@ -11,25 +11,60 @@ class SWI(Module):
     SwiGLU: Gated MLP variant using Swish activation.
     y = Linear1(x) * swish(Linear2(x)), then projected by Linear3.
     """
-    def __init__(self, mp, n_emb_in, n_emb_out, n_expansion):
+    def __init__(self, mp, n_ctx, n_emb_in, n_emb_out, n_expansion):
         super().__init__()
         self.mp = mp
+        self.n_ctx = n_ctx
         self.n_emb_in = n_emb_in
         n_emb_hid = n_emb_in * n_expansion
         self.n_emb_hid = n_emb_hid
         self.n_emb_out = n_emb_out
 
-        self.c_proj_up = Linear(mp, n_emb_in, n_emb_hid)
-        self.c_proj_gt = Linear(mp, n_emb_in, n_emb_hid)
-        self.linear_dn = Linear(mp, n_emb_hid, n_emb_out)
+        # Projection layers
+        self.c_proj_up = Linear(mp, n_emb_in, n_emb_hid, bias=True)
+        self.c_proj_gt = Linear(mp, n_emb_in, n_emb_hid, bias=True)
+        self.c_proj_dn = Linear(mp, n_emb_hid, n_emb_out, bias=True)
 
     def parameters(self):
-        return self.c_proj_up.parameters() + self.c_proj_gt.parameters() + self.linear_dn.parameters()
+        return self.c_proj_up.parameters() + self.c_proj_gt.parameters() + self.c_proj_dn.parameters()
+    
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the SWI (SwiGLU) forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        batch_size: number of sequences in the batch
+        seq_len: sequence length
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
 
+        flops = 0
+
+        # First projection (up branch)
+        flops += linear_flops(self.n_emb_in, self.n_emb_hid)
+
+        # Second projection (gate branch)
+        flops += linear_flops(self.n_emb_in, self.n_emb_hid)
+
+        # Swish activation: sigmoid (~4 FLOPs) + multiply (~1 FLOP)
+        flops += 5 * batch_size * self.n_ctx * self.n_emb_hid
+
+        # Elementwise multiply h1 * gate
+        flops += batch_size * self.n_ctx * self.n_emb_hid
+
+        # Final projection down
+        flops += linear_flops(self.n_emb_hid, self.n_emb_out)
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+    
     def set(self, mode=True):
         self.c_proj_up.set(mode)
         self.c_proj_gt.set(mode)
-        self.linear_dn.set(mode)
+        self.c_proj_dn.set(mode)
 
     def swish(self, x):
         return x * sigmoid(self.mp, x)
@@ -44,12 +79,12 @@ class SWI(Module):
         self.h2 = self.c_proj_gt.forward(x)
         self.gate = self.swish(self.h2)
         self.h = self.h1 * self.gate
-        self.out = self.linear_dn.forward(self.h)
+        self.out = self.c_proj_dn.forward(self.h)
         return self.out
 
     def backward(self, grad_output):
         # Backprop through c_proj_dn
-        grad_h, c_proj_dn_grads = self.linear_dn.backward(grad_output)  # grad_h: (batch, hidden_features)
+        grad_h, c_proj_dn_grads = self.c_proj_dn.backward(grad_output)  # grad_h: (batch, hidden_features)
 
         # h = h1 * gate
         grad_h1 = grad_h * self.gate
@@ -70,29 +105,20 @@ class SWI(Module):
     
     def from_dict(self, weights_dict, i):
         self.c_proj_up.weight = weights_dict[f'block_{i}_swi_c_proj_up_weight']
-        if weights_dict.get(f'block_{i}_swi_c_proj_up_bias') is not None:
-            self.c_proj_up.bias = weights_dict[f'block_{i}_swi_c_proj_up_bias']
+        self.c_proj_up.bias = weights_dict[f'block_{i}_swi_c_proj_up_bias']
         self.c_proj_gt.weight = weights_dict[f'block_{i}_swi_c_proj_gt_weight']
-        if weights_dict.get(f'block_{i}_swi_c_proj_gt_bias') is not None:
-            self.c_proj_gt.bias = weights_dict[f'block_{i}_swi_c_proj_gt_bias']
-        self.linear_dn.weight = weights_dict[f'block_{i}_swi_c_proj_dn_weight']
-        if weights_dict.get(f'block_{i}_swi_c_proj_dn_bias') is not None:
-            self.linear_dn.bias = weights_dict[f'block_{i}_swi_c_proj_dn_bias']
+        self.c_proj_gt.bias = weights_dict[f'block_{i}_swi_c_proj_gt_bias']
+        self.c_proj_dn.weight = weights_dict[f'block_{i}_swi_c_proj_dn_weight']
+        self.c_proj_dn.bias = weights_dict[f'block_{i}_swi_c_proj_dn_bias']
 
-        self.c_proj_up._parameters = [self.c_proj_up.weight]
-        if self.c_proj_up.bias is not None:
-            self.c_proj_up._parameters.append(self.c_proj_up.bias)
-        self.c_proj_gt._parameters = [self.c_proj_gt.weight]
-        if self.c_proj_gt.bias is not None:
-            self.c_proj_gt._parameters.append(self.c_proj_gt.bias)
-        self.linear_dn._parameters = [self.linear_dn.weight]
-        if self.linear_dn.bias is not None:
-            self.linear_dn._parameters.append(self.linear_dn.bias)
+        self.c_proj_up.synchronize()        
+        self.c_proj_gt.synchronize()
+        self.c_proj_dn.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_swi_c_proj_up_weight'] = self.c_proj_up.weight
-        weights_dict[f'block_{i}_swi_c_proj_up_bias'] = self.c_proj_up.bias if self.c_proj_up.bias is not None else None
+        weights_dict[f'block_{i}_swi_c_proj_up_bias'] = self.c_proj_up.bias
         weights_dict[f'block_{i}_swi_c_proj_gt_weight'] = self.c_proj_gt.weight
-        weights_dict[f'block_{i}_swi_c_proj_gt_bias'] = self.c_proj_gt.bias if self.c_proj_gt.bias is not None else None
-        weights_dict[f'block_{i}_swi_c_proj_dn_weight'] = self.linear_dn.weight
-        weights_dict[f'block_{i}_swi_c_proj_dn_bias'] = self.linear_dn.bias if self.linear_dn.bias is not None else None
+        weights_dict[f'block_{i}_swi_c_proj_gt_bias'] = self.c_proj_gt.bias
+        weights_dict[f'block_{i}_swi_c_proj_dn_weight'] = self.c_proj_dn.weight
+        weights_dict[f'block_{i}_swi_c_proj_dn_bias'] = self.c_proj_dn.bias

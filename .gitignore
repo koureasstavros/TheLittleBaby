@@ -10,6 +10,8 @@
 /tokenizers/
 # Ignore the entire promos directory
 /promos/
+# Ignore the entire papers directory
+/papers/
 # Ignore the entire backups directory
 /backups/
 # Ignore the entire expirements directory

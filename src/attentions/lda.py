@@ -18,17 +18,17 @@ class LDA(Module):
     - Complexity: O(B·T·D)
     Params order: k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout, kernel_size):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, kernel_size):
         super().__init__()
         self.mp = mp
-        self.n_emb = n_emb
         self.n_ctx = n_ctx
+        self.n_emb = n_emb
         self.kernel_size = kernel_size
 
         # Projections
         self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
         self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb)
+        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
 
         # Depthwise conv layer
         self.depthwise_conv = DepthwiseConv1D(mp, n_emb, kernel_size)
@@ -56,6 +56,43 @@ class LDA(Module):
               )
         return params
 
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for this LDA layer.
+        Includes K/V projections, elementwise gating, normalization,
+        depthwise convolution, and output projection.
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+        flops = 0
+
+         # K and V projections: (B, T, D) x (D, D)
+        flops += 2 * batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
+
+        # Elementwise gating (K * V)
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        # Normalization (gamma*x + beta) ~2 FLOPs per element
+        flops += 2 * batch_size * self.n_ctx * self.n_emb
+
+        # Depthwise convolution: each channel has kernel_size multiplications per position
+        flops += batch_size * self.n_ctx * self.n_emb * self.kernel_size * 2  # multiply–add ×2
+
+        # Output projection: (B, T, D) x (D, D)
+        flops += batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
+
+        # Bias add for output projection
+        if self.c_proj.bias is not None:
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        # Dropout (approximate)
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+    
     def set(self, mode=True):
         super().set(mode)
         for m in (self.k_proj, self.v_proj, self.c_proj,
@@ -157,25 +194,22 @@ class LDA(Module):
         self.k_proj.weight = weights_dict[f'block_{i}_lda_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_lda_v_weight']
         self.c_proj.weight = weights_dict[f'block_{i}_lda_c_weight']
-        if weights_dict[f'block_{i}_lda_c_bias'] is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_lda_c_bias']
+        self.c_proj.bias = weights_dict[f'block_{i}_lda_c_bias']
         self.depthwise_conv.weight = weights_dict[f'block_{i}_lda_conv_weight']
         self.depthwise_conv.bias = weights_dict[f'block_{i}_lda_conv_bias']
         self.norm.gamma = weights_dict[f'block_{i}_lda_norm_gamma']
         self.norm.beta = weights_dict[f'block_{i}_lda_norm_beta']
 
-        self.k_proj._parameters = [self.k_proj.weight]
-        self.v_proj._parameters = [self.v_proj.weight]
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.k_proj.synchronize()
+        self.v_proj.synchronize()
+        self.c_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lda_kernel_size'] = self.kernel_size
         weights_dict[f'block_{i}_lda_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_lda_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_lda_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_lda_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_lda_c_bias'] = self.c_proj.bias
         weights_dict[f'block_{i}_lda_conv_weight'] = self.depthwise_conv.weight
         weights_dict[f'block_{i}_lda_conv_bias'] = self.depthwise_conv.bias
         weights_dict[f'block_{i}_lda_norm_gamma'] = self.norm.gamma

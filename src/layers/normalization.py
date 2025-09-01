@@ -18,6 +18,9 @@ class Normalization(Module):
         
         self.gamma = self.mp.ones(dims)  # Learnable scaling parameter
         self.beta = self.mp.zeros(dims)  # Learnable shifting parameter
+        self.synchronize()
+
+    def synchronize(self):
         self._parameters = [self.gamma, self.beta]
 
     def forward(self, x):

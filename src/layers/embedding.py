@@ -16,7 +16,10 @@ class Embedding(Module):
         
         # Initialize weights with small random values
         self.weight = self.mp.random.randn(num_embeddings, embedding_dim) * 0.02
-        self._parameters = [self.weight] # Register weight as a parameter
+        self.synchronize()
+
+    def synchronize(self):
+        self._parameters = [self.weight]
 
     def forward(self, x):
         """

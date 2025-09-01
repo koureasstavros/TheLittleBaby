@@ -15,17 +15,23 @@ class GGL(Module):
     - Each group has its own linear + gate
     - Merge back to full embedding
     """
-    def __init__(self, mp, n_emb, p_dropout, n_groups):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, n_groups):
         super().__init__()
         assert n_emb % n_groups == 0
         self.mp = mp
+        self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.n_groups = n_groups
         self.group_dim = n_emb // n_groups
         self.p_dropout = p_dropout
 
-        self.linears = [Linear(mp, self.group_dim, self.group_dim) for _ in range(n_groups)]
-        self.gates = [Linear(mp, self.group_dim, self.group_dim) for _ in range(n_groups)]
+        # Linear layers for each group
+        self.linears = [Linear(mp, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
+
+        # Gating layers for each group
+        self.gates = [Linear(mp, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
+
+        # Dropout layer
         self.dropout = Dropout(mp, p_dropout)
 
     def parameters(self):
@@ -34,6 +40,33 @@ class GGL(Module):
             params += l.parameters() + g.parameters()
         return params
 
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for the GGL forward pass.
+        Multiply-adds are counted as 2 FLOPs.
+        training: if True, include backward/update cost (~3x forward)
+        """
+        def linear_flops(in_f, out_f):
+            return 2 * batch_size * self.n_ctx * in_f * out_f
+
+        flops = 0
+
+        # Per group: linear projection + gate projection + sigmoid + elementwise multiply
+        for _ in range(self.n_groups):
+            # Linear projection
+            flops += linear_flops(self.group_dim, self.group_dim)
+            # Gate projection
+            flops += linear_flops(self.group_dim, self.group_dim)
+            # Sigmoid activation (~4 FLOPs per element)
+            flops += 4 * batch_size * self.n_ctx * self.group_dim
+            # Elementwise multiply
+            flops += batch_size * self.n_ctx * self.group_dim
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+    
     def forward(self, x):
         B, T, D = x.shape
         groups = self.mp.split(x, self.n_groups, axis=2)
@@ -71,12 +104,13 @@ class GGL(Module):
 
     def from_dict(self, weights_dict, i):
         for group_idx in range(self.n_groups):
-            self.linears[group_idx].weight = weights_dict[f'block_{i}_ggl_linear{group_idx}_weight']
-            self.gates[group_idx].weight = weights_dict[f'block_{i}_ggl_gate{group_idx}_weight']
-            self.linears[group_idx]._parameters = [self.linears[group_idx].weight]
-            self.gates[group_idx]._parameters = [self.gates[group_idx].weight]
+            self.linears[group_idx].weight = weights_dict[f'block_{i}_ggl_linear_{group_idx}_weight']            
+            self.gates[group_idx].weight = weights_dict[f'block_{i}_ggl_gate_{group_idx}_weight']
+
+            self.linears[group_idx].synchronize()
+            self.gates[group_idx].synchronize()
 
     def to_dict(self, weights_dict, i):
         for group_idx in range(self.n_groups):
-            weights_dict[f'block_{i}_ggl_linear{group_idx}_weight'] = self.linears[group_idx].weight
-            weights_dict[f'block_{i}_ggl_gate{group_idx}_weight'] = self.gates[group_idx].weight
+            weights_dict[f'block_{i}_ggl_linear_{group_idx}_weight'] = self.linears[group_idx].weight
+            weights_dict[f'block_{i}_ggl_gate_{group_idx}_weight'] = self.gates[group_idx].weight

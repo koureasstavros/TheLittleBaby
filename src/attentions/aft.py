@@ -15,17 +15,17 @@ class AFT(Module):
     - Inference: running sums S, SV with sliding window up to n_ctx
     Params order (unchanged): q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout):
         super().__init__()
         self.mp = mp
-        self.n_emb = n_emb
         self.n_ctx = n_ctx
+        self.n_emb = n_emb
 
         # Projections
         self.q_proj = Linear(mp, n_emb, n_emb, bias=False)  # kept for parameter order, unused in forward
         self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
         self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb)
+        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, p_dropout)
@@ -43,6 +43,49 @@ class AFT(Module):
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
 
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for this AFT layer.
+        Since AFT avoids QK^T, complexity is O(B·T·D).
+        Includes K/V projections, elementwise exp/mul/div, and output projection.
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+        flops = 0
+
+        # Q projection (kept for parameter order, unused in forward)
+        flops += batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
+
+        # K and V projections: (B, T, D) x (D, D)
+        flops += 2 * batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
+
+        # Elementwise exp on K
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        # Elementwise multiply E * V
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        # Cumulative sums S and SV
+        flops += 2 * batch_size * self.n_ctx * self.n_emb
+
+        # Elementwise division SV / S
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        # Output projection: (B, T, D) x (D, D)
+        flops += batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
+
+        # Bias add for output projection
+        if self.c_proj.bias is not None:
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        # Dropout (approximate)
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+    
     def set(self, mode=True):
         super().set(mode)
         for m in (self.q_proj, self.k_proj, self.v_proj, self.c_proj,
@@ -192,18 +235,16 @@ class AFT(Module):
         self.k_proj.weight = weights_dict[f'block_{i}_aft_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_aft_v_weight']
         self.c_proj.weight = weights_dict[f'block_{i}_aft_c_weight']
-        if weights_dict.get(f'block_{i}_aft_c_bias') is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_aft_c_bias']
+        self.c_proj.bias = weights_dict[f'block_{i}_aft_c_bias']
 
-        self.q_proj._parameters = [self.q_proj.weight]
-        self.k_proj._parameters = [self.k_proj.weight]
-        self.v_proj._parameters = [self.v_proj.weight]
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.q_proj.synchronize()
+        self.k_proj.synchronize()
+        self.v_proj.synchronize()
+        self.c_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_aft_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_aft_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_aft_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_aft_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_aft_c_bias'] = self.c_proj.bias

@@ -14,12 +14,12 @@ class MHA(Module):
     Multi-Head Self-Attention mechanism.
     Computes attention scores and combines information from different "heads".
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout, head_size, n_heads):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, head_size, n_heads):
         super().__init__()        
         assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
-        self.n_emb = n_emb
         self.n_ctx = n_ctx
+        self.n_emb = n_emb
         self.head_size = head_size
         self.n_heads = n_heads
         self.p_dropout = p_dropout
@@ -33,7 +33,7 @@ class MHA(Module):
         self.v_proj = Linear(mp, n_emb, head_size, bias=False)  #W^V
 
         # Output projection
-        self.c_proj = Linear(mp, head_size, n_emb)
+        self.c_proj = Linear(mp, head_size, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, p_dropout)
@@ -56,6 +56,41 @@ class MHA(Module):
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+    
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for this MHA layer.
+        seq_len: actual sequence length (defaults to self.n_ctx for worst-case)
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+
+        flops = 0
+
+        # Q, K, V projections: (B, T, n_emb) x (n_emb, head_size)
+        # Multiply–add counted as 2 FLOPs
+        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.head_size * 2
+
+        # Attention score computation: Q @ K^T
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
+
+        # Softmax over attention scores
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * 5  # exp + sum + div approx
+
+        # Weighted sum: Attn @ V
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
+
+        # Output projection: (B, T, head_size) x (head_size, n_emb)
+        flops += batch_size * self.n_ctx * self.head_size * self.n_emb * 2
+
+        # Bias add for output projection
+        if self.c_proj.bias is not None:
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
 
     def set(self, mode=True):
         """Sets the attention module and its sub-modules to training/eval mode."""
@@ -231,19 +266,16 @@ class MHA(Module):
         self.k_proj.weight = weights_dict[f'block_{i}_mha_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_mha_v_weight']
         self.c_proj.weight = weights_dict[f'block_{i}_mha_c_weight']
-        if weights_dict[f'block_{i}_mha_c_bias'] is not None:
-            self.c_proj.bias = weights_dict[f'block_{i}_mha_c_bias']
+        self.c_proj.bias = weights_dict[f'block_{i}_mha_c_bias']
 
-        self.q_proj._parameters = [self.q_proj.weight]
-        self.k_proj._parameters = [self.k_proj.weight]
-        self.v_proj._parameters = [self.v_proj.weight]
-        self.c_proj._parameters = [self.c_proj.weight]
-        if self.c_proj.bias is not None:
-            self.c_proj._parameters.append(self.c_proj.bias)
+        self.q_proj.synchronize()
+        self.k_proj.synchronize()
+        self.v_proj.synchronize()
+        self.c_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_mha_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_mha_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_mha_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_mha_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_mha_c_bias'] = self.c_proj.bias if self.c_proj.bias is not None else None
+        weights_dict[f'block_{i}_mha_c_bias'] = self.c_proj.bias

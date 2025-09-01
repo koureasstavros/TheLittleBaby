@@ -17,6 +17,9 @@ class Linear(Module):
         # Initialize weights with small random values
         self.weight = self.mp.random.randn(in_features, out_features) * 0.02
         self.bias = self.mp.zeros(out_features) if bias else None
+        self.synchronize()
+
+    def synchronize(self):
         self._parameters = [self.weight]
         if self.bias is not None:
             self._parameters.append(self.bias)

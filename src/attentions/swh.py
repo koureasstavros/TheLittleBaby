@@ -17,12 +17,12 @@ class SWH(Module):
     - Backward uses straight-through estimator: gradients flow as if softmax (stable training)
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_emb, n_ctx, p_dropout, head_size, n_heads, temperature=1.0):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, head_size, n_heads, temperature=1.0):
         super().__init__()
         assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
-        self.n_emb = n_emb
         self.n_ctx = n_ctx
+        self.n_emb = n_emb
         self.head_size = head_size
         self.n_heads = n_heads
 
@@ -41,7 +41,7 @@ class SWH(Module):
         self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
 
         # Project selected head d_k -> n_emb
-        self.m_proj = Linear(mp, self.d_k, n_emb)
+        self.m_proj = Linear(mp, self.d_k, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, p_dropout)
@@ -64,6 +64,45 @@ class SWH(Module):
                 self.g_proj.parameters() +
                 self.m_proj.parameters())
 
+    def flops(self, batch_size, training):
+        """
+        Estimate FLOPs for this SWH layer.
+        Includes Q/K/V projections, attention, gating, and m_proj.
+        batch_size: number of sequences in the batch
+        training: if True, include backward/update cost (~3x forward)
+        """
+        flops = 0
+
+        # Q, K, V projections
+        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.head_size * 2
+
+        # Attention score computation: Q @ K^T (local window)
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
+
+        # Masking
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx
+
+        # Softmax over local window
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * 5
+
+        # Weighted sum: Attn @ V
+        flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
+
+        # Output projection
+        flops += batch_size * self.n_ctx * self.head_size * self.n_emb * 2
+
+        # Bias add for output projection
+        if self.m_proj.bias is not None:
+            flops += batch_size * self.n_ctx * self.n_emb
+
+        # Dropout (approximate)
+        flops += batch_size * self.n_ctx * self.n_emb
+
+        if training:
+            flops *= 3  # forward + backward + update
+
+        return flops
+
     def set(self, mode=True):
         super().set(mode)
         for m in (self.q_proj, self.k_proj, self.v_proj,
@@ -74,11 +113,8 @@ class SWH(Module):
             self.clear_cache()
 
     def _one_hot_argmax(self, logits):
-        # logits: (B,T,H)
-        idx = self.mp.argmax(logits, axis=-1)                            # (B,T)
-        one_hot = self.mp.zeros_like(logits)
-        B, T, H = logits.shape
-        one_hot[self.mp.arange(B)[:, None], self.mp.arange(T)[None, :], idx] = 1.0
+        idx = self.mp.argmax(logits, axis=-1)  # (B,T)
+        one_hot = self.mp.eye(self.n_heads)[idx]  # (B,T,H)
         return one_hot, idx
 
     def forward(self, x, use_cache):
@@ -254,27 +290,19 @@ class SWH(Module):
         self.k_proj.weight = weights_dict[f'block_{i}_swh_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_swh_v_weight']
         self.g_proj.weight = weights_dict[f'block_{i}_swh_g_weight']
-        if weights_dict.get(f'block_{i}_swh_g_bias') is not None:
-            self.g_proj.bias = weights_dict[f'block_{i}_swh_g_bias']
         self.m_proj.weight = weights_dict[f'block_{i}_swh_m_weight']
-        if weights_dict.get(f'block_{i}_swh_m_bias') is not None:
-            self.m_proj.bias = weights_dict[f'block_{i}_swh_m_bias']
+        self.m_proj.bias = weights_dict[f'block_{i}_swh_m_bias']
 
-        self.q_proj._parameters = [self.q_proj.weight]
-        self.k_proj._parameters = [self.k_proj.weight]
-        self.v_proj._parameters = [self.v_proj.weight]
-        self.g_proj._parameters = [self.g_proj.weight]
-        if self.g_proj.bias is not None:
-            self.g_proj._parameters.append(self.g_proj.bias)
-        self.m_proj._parameters = [self.m_proj.weight]
-        if self.m_proj.bias is not None:
-            self.m_proj._parameters.append(self.m_proj.bias)
+        self.q_proj.synchronize()
+        self.k_proj.synchronize()
+        self.v_proj.synchronize()
+        self.g_proj.synchronize()
+        self.m_proj.synchronize()
 
     def to_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_swh_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_swh_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_swh_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_swh_g_weight'] = self.g_proj.weight
-        weights_dict[f'block_{i}_swh_g_bias'] = self.g_proj.bias if self.g_proj.bias is not None else None
         weights_dict[f'block_{i}_swh_m_weight'] = self.m_proj.weight
-        weights_dict[f'block_{i}_swh_m_bias'] = self.m_proj.bias if self.m_proj.bias is not None else None
+        weights_dict[f'block_{i}_swh_m_bias'] = self.m_proj.bias
