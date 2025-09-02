@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.5
+version: v0.1.6
 ---
 
 # 👶 The Little Baby
@@ -295,14 +295,6 @@ These hyperparameters collectively define the training process, where a model's 
   - Speed: Increasing n_emb increases the size of nearly all weight matrices in the model. This leads to more parameters, which increases both memory usage and the time required for matrix multiplications. The impact is significant but generally more linear than n_ctx.
   - Quality: A larger n_emb gives the model more capacity to learn rich, complex representations of tokens and their relationships. This can lead to a more powerful and accurate model, but also increases the risk of overfitting if the model is too large for the dataset.
 
-- **dropout**
-
-  - Values: [0.1 : 0.001]
-  - What it is: A regularization technique where a fraction of neuron activations are randomly set to zero during each training step. This prevents the model from becoming too reliant on any single neuron.
-  - Size: Has no impact on the number of parameters in the model.
-  - Speed: Has a negligible impact on training speed and no impact on inference speed (it's disabled during evaluation).
-  - Quality: Crucial for improving model generalization and preventing overfitting. By forcing the network to learn redundant representations, it makes the model more robust. The value (e.g., 0.1) is the probability of a neuron being dropped.
-
 - **head_size**
   
   - Values: [8 : ****]
@@ -343,13 +335,28 @@ These hyperparameters collectively define the training process, where a model's 
   - Speed: A larger batch_size allows for more parallelization, generally leading to faster training (fewer updates per epoch). However, it also requires more memory.
   - Quality: This is a trade-off. Larger batches provide a more accurate and stable gradient estimate, but the noise from smaller batches can act as a regularizer, helping the model find a better minimum and generalize better.
 
-- **lr**
+- **r_dropout**
+
+  - Values: [0.1 : 0.001]
+  - What it is: A regularization technique where a fraction of neuron activations are randomly set to zero during each training step. This prevents the model from becoming too reliant on any single neuron.
+  - Size: Has no impact on the number of parameters in the model.
+  - Speed: Has a negligible impact on training speed and no impact on inference speed (it's disabled during evaluation).
+  - Quality: Crucial for improving model generalization and preventing overfitting. By forcing the network to learn redundant representations, it makes the model more robust. The value (e.g., 0.1) is the probability of a neuron being dropped.
+
+- **r_learn**
 
   - Values: [0.1 : 0.0001]
   - What it is: Controls how much the model's weights are adjusted with respect to the loss gradient. It determines the step size at each iteration.
   - Size: Has no impact on the number of parameters in the model.
-  - Speed: Affects the speed of convergence. A higher lr might converge faster, but risks overshooting the optimal weights. A lower lr is more stable but can be very slow to converge.
+  - Speed: Affects the speed of convergence. A higher learning rate might converge faster, but risks overshooting the optimal weights. A lower earning rate is more stable but can be very slow to converge.
   - Quality: This is one of the most critical parameters. If it's too high, the training can become unstable and diverge. If it's too low, the model may get stuck in a suboptimal solution or take too long to train. The AdamW optimizer helps adapt the learning rate, but the initial value is still very important.
+
+- **s_warmup**
+  - Values: [none, auto, 1 : 0.0001]
+  - What it is: Controls how much the model's steps are contributing to the training weights based on proportional learning rate.
+  - Size: Has no impact on the number of parameters in the model.
+  - Speed: Affects the speed of convergence based on proportional learning rate.
+  - Quality: This is one of the most critical parameters. If it's too high, the optimizer will process high number of steps until it reaches the full learning rate. If it's too low, the optimizer will process a few number of steps until it reaches the full learning rate. 
 
 
 ## 📐 Formulas
