@@ -17,12 +17,13 @@ class LOR(Module):
         r is the rank,
         alpha is a scaling factor.
     """
-    def __init__(self, mp, n_ctx, n_emb, n_out, p_dropout, rank=4, alpha=1.0):
+    def __init__(self, mp, n_ctx, n_emb, n_out, r_dropout, rank=4, alpha=1.0):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.n_out = n_out
+        self.r_dropout = r_dropout
         self.rank = rank
         self.alpha = alpha
         self.scaling = alpha / rank
@@ -36,7 +37,7 @@ class LOR(Module):
         self.c_proj_up = Linear(mp, rank, n_out, bias=False)
 
         # Dropout for regularization
-        self.p_dropout = Dropout(mp, p_dropout)
+        self.dropout = Dropout(mp, r_dropout)
 
     def parameters(self):
         """Return only trainable LoRA parameters (A and B)."""
@@ -72,7 +73,7 @@ class LOR(Module):
         super().set(mode)
         self.c_proj_dn.set(mode)
         self.c_proj_up.set(mode)
-        self.p_dropout.set(mode)
+        self.dropout.set(mode)
 
     def forward(self, x):
         """
@@ -91,7 +92,7 @@ class LOR(Module):
         out = base_out + lora_out
 
         # 4. Apply dropout
-        out = self.p_dropout.forward(out)
+        out = self.dropout.forward(out)
 
         return out
 
@@ -102,7 +103,7 @@ class LOR(Module):
         """
 
         # 1. Backward through dropout
-        grad_combined, _ = self.p_dropout.backward(grad_output)
+        grad_combined, _ = self.dropout.backward(grad_output)
 
         # 2. Split gradient for LoRA path (base_proj is frozen, so no grads)
         grad_lora = grad_combined

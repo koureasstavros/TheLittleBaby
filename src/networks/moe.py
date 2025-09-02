@@ -14,11 +14,12 @@ class MOE(Module):
     y = sum_e softmax(gate(x))_e * Expert_e(x)
     Each Expert_e: Linear_up -> GELU -> Linear_down -> Dropout
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, n_expansion, n_experts):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, n_expansion, n_experts):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
-        self.n_emb = n_emb
+        self.n_emb = n_emb        
+        self.r_dropout = r_dropout
         self.n_expansion = n_expansion
         self.n_experts = n_experts
 
@@ -30,7 +31,7 @@ class MOE(Module):
         self.c_proj_dn = [Linear(mp, n_expansion * n_emb, n_emb, bias=True) for _ in range(n_experts)]
 
         # Dropout layer
-        self.p_dropout = Dropout(mp, p_dropout)
+        self.dropout = Dropout(mp, r_dropout)
 
     def parameters(self):
         params = self.g_proj.parameters()
@@ -74,7 +75,7 @@ class MOE(Module):
         self.g_proj.set(mode)
         for u, d in zip(self.c_proj_up, self.c_proj_dn):
             u.set(mode); d.set(mode)
-        self.p_dropout.set(mode)
+        self.dropout.set(mode)
 
     def forward(self, x):
         """
@@ -106,7 +107,7 @@ class MOE(Module):
         y = self.mp.sum(gate_probs[..., None] * expert_out_stacked, axis=2)  # (B,T,D)
 
         # 6. Apply dropout
-        y = self.p_dropout.forward(y)
+        y = self.dropout.forward(y)
 
         # 7. Cache for backward
         self._cache = (x, gate_logits, gate_probs,
@@ -126,7 +127,7 @@ class MOE(Module):
         E = self.n_experts
 
         # 2. Dropout backward
-        grad_y, _ = self.p_dropout.backward(grad_output)  # (B,T,D)
+        grad_y, _ = self.dropout.backward(grad_output)  # (B,T,D)
 
         # 3. Grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
         # For each expert e: contribution scaled by p_e

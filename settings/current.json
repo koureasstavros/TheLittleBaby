@@ -1,5 +1,5 @@
 {
-    "c_device": "gpu",
+    "c_device": "cpu",
     "c_device_cpu_cores": "16",
     "c_device_gpu_core": "0",
     "c_device_gpu_cuda": "auto",
@@ -11,11 +11,12 @@
     "c_optimizer": "adamw",
     "n_ctx": 128,
     "n_emb": 128,
-    "dropout": 0.1,
     "head_size": 128,
     "n_heads": 16,
-    "n_layers": 16,
+    "n_layers": 4,
     "num_epochs": 1,
     "batch_size": 16,
-    "lr": 0.001
+    "r_dropout": 0.1,
+    "r_learn": 0.001,
+    "s_warmup": "none"
 }

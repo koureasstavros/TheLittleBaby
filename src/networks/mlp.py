@@ -13,11 +13,12 @@ class MLP(Module):
     Multi-Layer Perceptron block, typically used in Transformer after attention.
     Consists of two linear layers with GELU activation and dropout.
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, n_expansion):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, n_expansion):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
 
         # First linear layer (expands dimension)
         self.c_proj_up = Linear(mp, n_emb, n_expansion * n_emb, bias=True)
@@ -25,7 +26,7 @@ class MLP(Module):
         self.c_proj_dn = Linear(mp, n_expansion * n_emb, n_emb, bias=True)
         
         # Dropout layer
-        self.p_dropout = Dropout(mp, p_dropout)
+        self.dropout = Dropout(mp, r_dropout)
 
     def parameters(self):
         """Returns all parameters of the MLP module."""
@@ -67,7 +68,7 @@ class MLP(Module):
         super().set(mode)
         self.c_proj_up.set(mode)
         self.c_proj_dn.set(mode)
-        self.p_dropout.set(mode)
+        self.dropout.set(mode)
 
     def forward(self, x):
         """
@@ -86,7 +87,7 @@ class MLP(Module):
         proj_out = self.c_proj_dn.forward(gelu_out)
 
         # 4. Apply dropout
-        dropped_out = self.p_dropout.forward(proj_out)
+        dropped_out = self.dropout.forward(proj_out)
 
         # 5. Store intermediate results for backward pass
         self._cache = (fc_out, gelu_out, proj_out)
@@ -104,7 +105,7 @@ class MLP(Module):
         fc_out, gelu_out, proj_out = self._cache
 
         # 2. Backward through dropout
-        grad_proj_out, _ = self.p_dropout.backward(grad_output)
+        grad_proj_out, _ = self.dropout.backward(grad_output)
 
         # 3. Backward through c_proj_dn
         grad_gelu_out, c_proj_dn_grads = self.c_proj_dn.backward(grad_proj_out)

@@ -18,11 +18,12 @@ class LDA(Module):
     - Complexity: O(B·T·D)
     Params order: k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, kernel_size):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, kernel_size):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
         self.kernel_size = kernel_size
 
         # Projections
@@ -34,8 +35,8 @@ class LDA(Module):
         self.depthwise_conv = DepthwiseConv1D(mp, n_emb, kernel_size)
 
         # Dropouts
-        self.attn_dropout = Dropout(mp, p_dropout)
-        self.resid_dropout = Dropout(mp, p_dropout)
+        self.attn_dropout = Dropout(mp, r_dropout)
+        self.resid_dropout = Dropout(mp, r_dropout)
 
         # Normalization layer
         self.norm = Normalization(mp, n_emb)

@@ -15,11 +15,12 @@ class AFT(Module):
     - Inference: running sums S, SV with sliding window up to n_ctx
     Params order (unchanged): q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, clip):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, clip):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
         self.clip = clip
 
         # Projections
@@ -29,8 +30,8 @@ class AFT(Module):
         self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
 
         # Dropout layers
-        self.attn_dropout = Dropout(mp, p_dropout)
-        self.resid_dropout = Dropout(mp, p_dropout)
+        self.attn_dropout = Dropout(mp, r_dropout)
+        self.resid_dropout = Dropout(mp, r_dropout)
 
         # KV cache for inference
         self.kv_cache = None

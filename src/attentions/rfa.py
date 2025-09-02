@@ -15,18 +15,18 @@ class RFA(Module):
     - Local sliding window attention for short-term context
     - Recurrent memory vector per head for long-term context
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, head_size, n_heads, window_size):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, head_size, n_heads, window_size):
         super().__init__()
         assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
         self.head_size = head_size
         self.n_heads = n_heads
         self.d_k = head_size // n_heads
         self.window_size = window_size
         
-        self.p_dropout = p_dropout
         self.k_cache = None
         self.v_cache = None
 
@@ -36,8 +36,8 @@ class RFA(Module):
         self.c_proj = Linear(mp, head_size, n_emb, bias=True)
 
         # Dropout layers
-        self.attn_dropout = Dropout(mp, p_dropout)
-        self.resid_dropout = Dropout(mp, p_dropout)
+        self.attn_dropout = Dropout(mp, r_dropout)
+        self.resid_dropout = Dropout(mp, r_dropout)
 
         # Recurrent memory per head
         self.memory = self.mp.zeros((1, n_heads, 1, self.d_k))

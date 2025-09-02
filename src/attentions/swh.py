@@ -17,12 +17,13 @@ class SWH(Module):
     - Backward uses straight-through estimator: gradients flow as if softmax (stable training)
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, head_size, n_heads, temperature=1.0):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, head_size, n_heads, temperature=1.0):
         super().__init__()
         assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
         self.head_size = head_size
         self.n_heads = n_heads
 
@@ -44,8 +45,8 @@ class SWH(Module):
         self.m_proj = Linear(mp, self.d_k, n_emb, bias=True)
 
         # Dropout layers
-        self.attn_dropout = Dropout(mp, p_dropout)
-        self.resid_dropout = Dropout(mp, p_dropout)
+        self.attn_dropout = Dropout(mp, r_dropout)
+        self.resid_dropout = Dropout(mp, r_dropout)
 
         # Causal mask
         causal_mask = mp.triu(mp.ones((n_ctx, n_ctx)) * -1e9, k=1)

@@ -12,21 +12,21 @@ from src.attentions.lda import LDA
 from src.attentions.rfa import RFA
 
 class Attention:
-    def __new__(cls, mp, c_attention, n_ctx, n_emb, p_dropout, head_size, n_heads):
+    def __new__(cls, mp, c_attention, n_ctx, n_emb, r_dropout, head_size, n_heads):
         match c_attention:
             case "mha":
-                return MHA(mp, n_ctx, n_emb, p_dropout, head_size, n_heads)
+                return MHA(mp, n_ctx, n_emb, r_dropout, head_size, n_heads)
             case "moh":
-                return MOH(mp, n_ctx, n_emb, p_dropout, head_size, n_heads)
+                return MOH(mp, n_ctx, n_emb, r_dropout, head_size, n_heads)
             case "gqa":
-                return GQA(mp, n_ctx, n_emb, p_dropout, head_size, n_heads)
+                return GQA(mp, n_ctx, n_emb, r_dropout, head_size, n_heads)
             case "swh":
-                return SWH(mp, n_ctx, n_emb, p_dropout, head_size, n_heads)
+                return SWH(mp, n_ctx, n_emb, r_dropout, head_size, n_heads)
             case "aft":
-                return AFT(mp, n_ctx, n_emb, p_dropout, clip=20.0)
+                return AFT(mp, n_ctx, n_emb, r_dropout, clip=20.0)
             case "lda":
-                return LDA(mp, n_ctx, n_emb, p_dropout, kernel_size=8)
+                return LDA(mp, n_ctx, n_emb, r_dropout, kernel_size=8)
             case "rfa":
-                return RFA(mp, n_ctx, n_emb, p_dropout, head_size, n_heads, window_size=8)
+                return RFA(mp, n_ctx, n_emb, r_dropout, head_size, n_heads, window_size=8)
             case _:
                 raise ValueError(f"Unknown attention type: {c_attention}")

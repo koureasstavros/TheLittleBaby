@@ -15,11 +15,12 @@ class LIN(Module):
     - Complexity: O(B·T·D)
     Params order: c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout, use_gate):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, use_gate):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.r_dropout = r_dropout
         self.use_gate = use_gate
 
         # Main projection
@@ -32,7 +33,7 @@ class LIN(Module):
             self.g_proj = None
 
         # Dropout layer
-        self.p_dropout = Dropout(mp, p_dropout)
+        self.dropout = Dropout(mp, r_dropout)
 
     def parameters(self):
         if self.use_gate:
@@ -72,7 +73,7 @@ class LIN(Module):
         self.c_proj.set(mode)
         if self.g_proj is not None:
             self.g_proj.set(mode)
-        self.p_dropout.set(mode)
+        self.dropout.set(mode)
 
     def forward(self, x):
         """
@@ -92,7 +93,7 @@ class LIN(Module):
             out = self._cache_c_lin
 
         # 3. Apply dropout
-        out = self.p_dropout.forward(out)
+        out = self.dropout.forward(out)
 
         return out
 
@@ -104,7 +105,7 @@ class LIN(Module):
         """
 
         # 1. Backward through dropout
-        grad_out, _ = self.p_dropout.backward(grad_output)
+        grad_out, _ = self.dropout.backward(grad_output)
 
         # 2. Optional gating
         if self.use_gate:

@@ -106,7 +106,7 @@ class GPT(Module):
         self.config_dict = config
         self.n_emb = config["n_emb"]
         self.n_ctx = config["n_ctx"]
-        self.p_dropout = config["dropout"]
+        self.r_dropout = config["r_dropout"]
         self.n_layers = config["n_layers"]
         self.head_size = config["head_size"]
         self.n_heads = config["n_heads"]
@@ -116,7 +116,7 @@ class GPT(Module):
         self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)                           # Tokenizer
         self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)                      # Token embeddings
         self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)                           # Positional embeddings
-        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.p_dropout, self.head_size, self.n_heads)
+        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.r_dropout, self.head_size, self.n_heads)
                     for _ in range(self.n_layers)]                                      # Stack of tokenizer blocks
         self.ln_f = Normalization(self.mp, self.n_emb)                                  # Final Layer Normalization
         self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size, bias=True)          # Language modeling head (output logits)
@@ -514,7 +514,7 @@ class GPT(Module):
         model._parameters = model_.parameters()
         return model
 
-    def train(self, input_text, train_cache, n_epochs, batch_size, lr):
+    def train(self, input_text, train_cache, n_epochs, batch_size, r_learn, s_warmup):
         """ Train the GPT model on the provided input data. """
         print(f"{'-'*10} {'Training in progress'} {'-'*10}" )
 
@@ -537,9 +537,9 @@ class GPT(Module):
 
         # Get parameters from the model
         params = self.parameters() 
-
+    
         # Initialize the optimizer
-        optimizer = Optimizer(self.mp, self.c_optimizer, params, learning_rate=lr)
+        optimizer = Optimizer(self.mp, self.c_optimizer, params, r_learn)
 
         batch_logs = []
         epoch_logs = []
@@ -571,6 +571,8 @@ class GPT(Module):
                 for X_batch, y_batch in train_batches:
                     train_batch_cnt += 1
                     train_batch_start_time = tm.time()  # Record start time
+                    # Adjust learning rate during warm-up
+                    optimizer.set_r_learn(r_learn, train_batch_cnt, train_batch_all, s_warmup)
                     # Compute loss and gradients
                     loss, grads = value_and_grad(self, X_batch, y_batch, train_cache)
                     # Update model parameters using the optimizer
@@ -637,7 +639,7 @@ class GPT(Module):
 
         # Create the report object
         report_dict = {
-            "num_epochs": n_epochs,
+            "n_epochs": n_epochs,
             "avg_train_time_per_batch": float(avg_train_time_per_batch),
             "train_batches_per_epoch": int(train_batch_all),
             "avg_val_time_per_batch": float(avg_val_time_per_batch),

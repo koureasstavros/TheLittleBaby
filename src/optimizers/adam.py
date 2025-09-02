@@ -8,10 +8,10 @@ class AdamW:
     AdamW optimizer implementation.
     Includes adaptive learning rates and weight decay.
     """
-    def __init__(self, mp, parameters, learning_rate=1e-3, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01):
+    def __init__(self, mp, parameters, r_learn, beta1, beta2, eps, weight_decay):
         self.mp = mp
         self.params = parameters
-        self.lr = learning_rate
+        self.lr = r_learn
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
@@ -49,3 +49,13 @@ class AdamW:
 
             # Update parameters with bias-corrected estimates - gradient descent
             p -= self.lr * m_hat / (self.mp.sqrt(v_hat) + self.eps)
+
+    def set_r_learn(self, r_learn, c_step=None, a_step=None, s_warmup=None):
+        if s_warmup == "none":
+            self.lr = r_learn
+        elif s_warmup == "auto":
+            s_warmup = a_step
+            self.lr = r_learn * (c_step / s_warmup) if c_step <= s_warmup else r_learn
+        else:
+            s_warmup = int(s_warmup)
+            self.lr = r_learn * (c_step / s_warmup) if c_step <= s_warmup else r_learn

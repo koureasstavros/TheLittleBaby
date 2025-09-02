@@ -1,5 +1,5 @@
 {
-    "num_epochs": 1,
+    "n_epochs": 1,
     "avg_train_time_per_batch": 1.594353500311705,
     "train_batches_per_epoch": 15957,
     "avg_val_time_per_batch": 0.5809703706209954,
