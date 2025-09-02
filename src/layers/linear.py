@@ -32,8 +32,10 @@ class Linear(Module):
         """
         self._cache = x # Store input for backward pass
         out = x.dot(self.weight)
+        
         if self.bias is not None:
             out = out + self.bias
+
         return out
 
     def backward(self, grad_output):

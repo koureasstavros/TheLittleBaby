@@ -47,5 +47,5 @@ class AdamW:
             # Compute bias-corrected second raw moment estimate
             v_hat = self.v[pid] / (1 - self.beta2 ** self.t)
 
-            # Update parameters
+            # Update parameters with bias-corrected estimates - gradient descent
             p -= self.lr * m_hat / (self.mp.sqrt(v_hat) + self.eps)

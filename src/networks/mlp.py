@@ -75,15 +75,22 @@ class MLP(Module):
         x: input tensor, shape (B, T, n_emb)
         Returns: output tensor, shape (B, T, n_emb)
         """
-        self._cache_x = x # Store input to MLP for backward pass
 
+        # 1. Forward through c_proj_up
         fc_out = self.c_proj_up.forward(x)
+
+        # 2. Apply GELU activation
         gelu_out = gelu(self.mp, fc_out)
+
+        # 3. Project back to original dimension
         proj_out = self.c_proj_dn.forward(gelu_out)
+
+        # 4. Apply dropout
         dropped_out = self.p_dropout.forward(proj_out)
 
-        # Store intermediate results for backward pass
+        # 5. Store intermediate results for backward pass
         self._cache = (fc_out, gelu_out, proj_out)
+
         return dropped_out
 
     def backward(self, grad_output):
@@ -92,30 +99,29 @@ class MLP(Module):
         grad_output: gradient from subsequent layer.
         Returns: (grad_input, list_of_param_grads)
         """
-        x = self._cache_x
+        
+        # 1. Unpack cached values
         fc_out, gelu_out, proj_out = self._cache
 
-        # Gradients will be collected in the order of self.parameters(): c_proj_up, c_proj_dn
-        current_mlp_param_grads = []
-
-        # 1. Backward through dropout
+        # 2. Backward through dropout
         grad_proj_out, _ = self.p_dropout.backward(grad_output)
 
-        # 2. Backward through c_proj_dn
+        # 3. Backward through c_proj_dn
         grad_gelu_out, c_proj_dn_grads = self.c_proj_dn.backward(grad_proj_out)
 
-        # 3. Backward through GELU activation
+        # 4. Backward through GELU activation
         # dL/dx = dL/dy * gelu_prime(x)
         grad_fc_out = grad_gelu_out * gelu_prime(self.mp, fc_out)
 
-        # 4. Backward through c_proj_up
+        # 5. Backward through c_proj_up
         grad_x, c_proj_up_grads = self.c_proj_up.backward(grad_fc_out)
 
         # Assemble gradients in the correct order: c_proj_up, c_proj_dn
-        current_mlp_param_grads.extend(c_proj_up_grads)
-        current_mlp_param_grads.extend(c_proj_dn_grads)
+        param_grads = []
+        param_grads.extend(c_proj_up_grads)
+        param_grads.extend(c_proj_dn_grads)
 
-        return grad_x, current_mlp_param_grads
+        return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
         self.c_proj_up.weight = weights_dict[f'block_{i}_mlp_proj_up_weight']

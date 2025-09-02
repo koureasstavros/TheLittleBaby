@@ -105,6 +105,16 @@ class MHA(Module):
         # Clear cache when switching to training mode
         if mode:
             self.clear_cache()
+    
+    def forward_split_heads(self, z):
+        B_s, T_s, H_s = z.shape
+        z = z.reshape(B_s, T_s, self.n_heads, self.d_k)
+        return z.transpose(0, 2, 1, 3) # (B, n_heads, T, d_k)
+    
+    def backward_unsplit_heads(self, z_grad, original_shape):
+        B_s, NH_s, T_s, DK_s = z_grad.shape
+        z_grad = z_grad.transpose(0, 2, 1, 3) # (B, T, n_heads, d_k)
+        return z_grad.reshape(original_shape) # (B, T, head_size)
 
     def forward(self, x, use_cache):
         """
@@ -113,22 +123,18 @@ class MHA(Module):
         """
         B, T, _ = x.shape
 
-        # Project input to Q, K, V
+        # 1. Project input to Q, K, V
         Q_orig = self.q_proj.forward(x)  #Q = X * W^Q (B, T, head_size)
         K_orig = self.k_proj.forward(x)  #K = X * W^K (B, T, head_size)
         V_orig = self.v_proj.forward(x)  #V = X * W^V (B, T, head_size)
 
-        # Helper function to split heads and transpose
-        def split_heads(z):
-            B_s, T_s, H_s = z.shape
-            z = z.reshape(B_s, T_s, self.n_heads, self.d_k)
-            return z.transpose(0, 2, 1, 3) # (B, n_heads, T, d_k)
+        # 2. Helper function to split heads and transpose
+        Q = self.forward_split_heads(Q_orig)
+        K_new = self.forward_split_heads(K_orig)
+        V_new = self.forward_split_heads(V_orig)
 
-        Q = split_heads(Q_orig)
-        K_new = split_heads(K_orig)
-        V_new = split_heads(V_orig)
-
-        if use_cache and not self.setting:  # Only use cache during inference
+        # Handle KV cache for inference
+        if use_cache and not self.setting:
             if self.kv_cache is not None:
                 # Concatenate with cached K, V
                 K_cached, V_cached = self.kv_cache
@@ -154,11 +160,11 @@ class MHA(Module):
         # Get actual sequence length for attention computation
         actual_seq_len = K.shape[2]
         
-        # Compute scaled dot-product attention scores
+        # 3. Compute scaled dot-product attention scores
         # (B, n_heads, T, d_k) @ (B, n_heads, d_k, actual_seq_len) -> (B, n_heads, T, actual_seq_len)
         scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)
 
-        # Apply causal mask (prevents attending to future tokens)
+        # 4. Apply causal mask (prevents attending to future tokens)
         # Adjust mask for the actual sequence lengths
         if use_cache and T == 1 and actual_seq_len > 1:
             # For single token generation, create a mask for the last position
@@ -171,22 +177,27 @@ class MHA(Module):
         
         masked_scores = scores + mask
 
+        # 5. Apply softmax to get attention weights
         attn_weights = softmax(self.mp, masked_scores, axis=-1)
+
+        # 6. Apply dropout to attention weights
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
-        # Compute weighted sum of values
+        # 7. Compute weighted sum of values
         # (B, n_heads, T, T) @ (B, n_heads, T, d_k) -> (B, n_heads, T, d_k)
         o = self.mp.matmul(attn_weights_dropped, V)
 
-        # Recombine heads: transpose and reshape back to (B, T, head_size)
+        # 8. Recombine heads: transpose and reshape back to (B, T, head_size)
         o_combined = o.transpose(0, 2, 1, 3).reshape(B, T, self.head_size)
 
-        # Final linear projection
+        # 9. Final linear projection
         out = self.c_proj.forward(o_combined)
+
+        # 10. Apply residual dropout
         out_dropped = self.resid_dropout.forward(out)
 
-        # Store all intermediate values needed for backward pass (unchanged for training)
-        if self.setting:  # Only cache for backward pass during training
+        # 11. Cache intermediate values for backward pass
+        if self.setting:
             self._cache = (x, Q_orig, K_orig, V_orig, Q, K_new, V_new, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
             
         return out_dropped
@@ -196,56 +207,50 @@ class MHA(Module):
         grad_output: gradient from the subsequent layer, shape (B, T, n_emb)
         Returns: (grad_input, list_of_param_grads)
         """
+
+        # 1. Unpack cached values
         (x, Q_orig, K_orig, V_orig, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined) = self._cache
 
-        # Gradients will be collected in the order of self.parameters(): q_proj, k_proj, v_proj, c_proj_dn
-        current_mha_param_grads = []
-
-        # 1. Backward through resid_dropout
+        # 2. Backward through resid_dropout
         grad_out_dropped, _ = self.resid_dropout.backward(grad_output) # Dropout has no params
 
-        # 2. Backward through c_proj (output linear layer)
+        # 3. Backward through c_proj (output linear layer)
         grad_o_combined, c_proj_grads = self.c_proj.backward(grad_out_dropped)
 
-        # 3. Undo reshape/transpose for o_combined to get grad_o
+        # 4. Undo reshape/transpose for o_combined to get grad_o
         # grad_o_combined: (B, T, head_size)
         # grad_o: (B, n_heads, T, d_k)
         B, T, H = grad_o_combined.shape
         grad_o = grad_o_combined.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
 
-        # 4. Backward through matmul(attn_weights_dropped, V)
+        # 5. Backward through matmul(attn_weights_dropped, V)
         # o = A @ V  => dL/dA = dL/do @ V.T, dL/dV = A.T @ dL/do
         grad_attn_weights_dropped = self.mp.matmul(grad_o, V.transpose(0, 1, 3, 2))
         grad_V = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_o)
 
-        # 5. Backward through attn_dropout
+        # 6. Backward through attn_dropout
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_dropped)
 
-        # 6. Backward through softmax (attn_weights = softmax(masked_scores))
+        # 7. Backward through softmax (attn_weights = softmax(masked_scores))
         # dL/dx = y * (dL/dy - sum(dL/dy * y)) where y = softmax(x)
         grad_masked_scores = grad_attn_weights * attn_weights - self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True) * attn_weights
 
-        # 7. Backward through scores + causal_mask (causal_mask is constant, so its gradient is 0)
+        # 8. Backward through scores + causal_mask (causal_mask is constant, so its gradient is 0)
         grad_scores = grad_masked_scores
 
-        # 8. Backward through scaled dot-product: scores = (Q @ K.T) / sqrt(d_k)
+        # 9. Backward through scaled dot-product: scores = (Q @ K.T) / sqrt(d_k)
         # Let S = Q @ K.T / sqrt(d_k)
         # dL/dQ = (dL/dS @ K) / sqrt(d_k)
         # dL/dK = (dL/dS.T @ Q) / sqrt(d_k)
         grad_Q = self.mp.matmul(grad_scores, K) / mt.sqrt(self.d_k)
         grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / mt.sqrt(self.d_k)
 
-        # 9. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
-        def un_split_heads(z_grad, original_shape):
-            B_s, NH_s, T_s, DK_s = z_grad.shape
-            z_grad = z_grad.transpose(0, 2, 1, 3) # (B, T, n_heads, d_k)
-            return z_grad.reshape(original_shape) # (B, T, head_size)
+        # 10. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
+        grad_Q_orig = self.backward_unsplit_heads(grad_Q, Q_orig.shape)
+        grad_K_orig = self.backward_unsplit_heads(grad_K, K_orig.shape)
+        grad_V_orig = self.backward_unsplit_heads(grad_V, V_orig.shape)
 
-        grad_Q_orig = un_split_heads(grad_Q, Q_orig.shape)
-        grad_K_orig = un_split_heads(grad_K, K_orig.shape)
-        grad_V_orig = un_split_heads(grad_V, V_orig.shape)
-
-        # 10. Backward through q_proj, k_proj, v_proj
+        # 11. Backward through q_proj, k_proj, v_proj
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_orig)
         grad_x_k, k_proj_grads = self.k_proj.backward(grad_K_orig)
         grad_x_v, v_proj_grads = self.v_proj.backward(grad_V_orig)
@@ -254,12 +259,13 @@ class MHA(Module):
         grad_x = grad_x_q + grad_x_k + grad_x_v
 
         # Assemble gradients in the correct order: q_proj, k_proj, v_proj, c_proj
-        current_mha_param_grads.extend(q_proj_grads)
-        current_mha_param_grads.extend(k_proj_grads)
-        current_mha_param_grads.extend(v_proj_grads)
-        current_mha_param_grads.extend(c_proj_grads)
+        param_grads = []
+        param_grads.extend(q_proj_grads)
+        param_grads.extend(k_proj_grads)
+        param_grads.extend(v_proj_grads)
+        param_grads.extend(c_proj_grads)
 
-        return grad_x, current_mha_param_grads
+        return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
         self.q_proj.weight = weights_dict[f'block_{i}_mha_q_weight']

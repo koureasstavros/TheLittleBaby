@@ -14,7 +14,7 @@ This section defines key terms used throughout the content, ensuring clarity and
 
 🧮 **Model Architecture**
 
-**Layer** – A building block of the model which transforms the input data and passes it to the next. LLMs have many layers stacked together.
+- **Layer** – A building block of the model which transforms the input data and passes it to the next. LLMs have many layers stacked together.
 
 - **Embedding Layer** – Converts tokens into vectors.
 
@@ -31,6 +31,11 @@ This section defines key terms used throughout the content, ensuring clarity and
 - **Mixture-of-Experts (MoE)** – is a modular architecture where different "expert" subnetworks are selectively activated per input token, often used to scale models efficiently.
 
 - **Mixture Head Attention (MoH)** – is reimagined as an MoE system, where heads = experts while replaces the standard summation of heads with a weighted, token-specific selection.
+
+- **Word Positional Embeddings (WPE)** - assigns fixed, absolute, learned positions to each token in a sequence.
+
+- **Rotary Positional Embeddings (RoPE)** - encodes relative positions using rotating sinusoidal patterns that generalize better to longer contexts.
+
 
 🔁 **Model Proces**
 
@@ -57,6 +62,10 @@ This section defines key terms used throughout the content, ensuring clarity and
 - **Gradient Descent** – The method used to adjust parameters during training. It helps the model get better by reducing errors step-by-step.
 
 - **Loss Function** – A mathematical formula that measures how far off the model’s predictions are from the correct answers. The goal is to minimize this loss during training.
+
+- **Learning Rate** - The learning rate controls how much a model’s weights are updated during training in response to the error it sees. It’s essentially the “step size” used by optimization algorithms like Stochastic Gradient Descent (SGD) or Adam to move toward a minimum of the loss function.
+
+- **Learning Rate Warm Up** - A learning rate warm-up means that during the first training steps (or iterations), the learning rate gradually increases from a very small value up to the target (or base) learning rate.
 
 
 🧪 **Inference Process**

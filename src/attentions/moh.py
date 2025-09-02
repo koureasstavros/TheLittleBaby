@@ -111,25 +111,31 @@ class MOH(Module):
         if mode:
             self.clear_cache()
 
+    def forward_split_heads(self, z, B, T):
+        return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,H,T,d_k)
+
+    def backward_unsplit_heads(self, z, original_shape):
+        return z.transpose(0,2,1,3).reshape(original_shape)
+    
     def forward(self, x, use_cache):
         """
         x: (B,T,n_emb)
         returns: (B,T,n_emb)
         """
+        
         B, T, _ = x.shape
 
-        # Projections
+        # 1. Projections
         Q_lin = self.q_proj.forward(x)  #Q = X * W^Q (B,T,head_size)
         K_lin = self.k_proj.forward(x)  #K = X * W^K (B,T,head_size)
         V_lin = self.v_proj.forward(x)  #V = X * W^V (B,T,head_size)
 
-        def split(z):
-            return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,H,T,d_k)
+        # 2. Split heads and reshape
+        Q = self.forward_split_heads(Q_lin, B, T)
+        K_new = self.forward_split_heads(K_lin, B, T)
+        V_new = self.forward_split_heads(V_lin, B, T)
 
-        Q = split(Q_lin)
-        K_new = split(K_lin)
-        V_new = split(V_lin)
-
+        # Handle KV cache for inference
         if use_cache and not self.setting:
             if self.kv_cache is not None:
                 K_cached, V_cached = self.kv_cache
@@ -153,39 +159,45 @@ class MOH(Module):
             actual_seq_len = T
             T_q = T
 
-        # Scores with cached keys
+        # 3. Compute attention scores
         scores = self.mp.matmul(Q, K.transpose(0,1,3,2)) / mt.sqrt(self.d_k)  # (B,H,T_q,total_len)
 
-        # Apply causal mask (prevents attending to future tokens)
+        # 4. Apply causal mask (prevents attending to future tokens)
         if use_cache and T_q == 1 and actual_seq_len > 1:
             mask = self.mp.zeros((1, actual_seq_len))
         else:
             mask = self.causal_mask[:T_q, :actual_seq_len]
-            
-
+    
         masked_scores = scores + mask  # broadcast (T or T_q, actual_seq_len)
+
+        # 5. Compute attention weights
         attn_weights = softmax(self.mp, masked_scores, axis=-1)  # (B,H,T_q,actual_seq_len)
+
+        # 6. Apply dropout
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
-        # Head outputs
+        # 7. Compute weighted sum of values
         o = self.mp.matmul(attn_weights_dropped, V)  # (B,H,T_q,d_k)
 
-        # Gate over heads (token-wise). Use corresponding x slice (last tokens if cache)
+        # 8. Compute gating logits and probabilities
         x_g_proj = x if (not use_cache or self.setting or T == o.shape[2]) else x[:, -o.shape[2]:, :]
         gate_logits = self.g_proj.forward(x_g_proj)  # (B,T_q,H)
         gate_probs = softmax(self.mp, gate_logits, axis=-1)    # (B,T_q,H)
 
-        # Rearrange heads for mixture
+        # 9. Compute mixture of head outputs
         o_perm = o.transpose(0,2,1,3)  # (B,T_q,H,d_k)
-        # Weighted sum across heads
         y = self.mp.sum(gate_probs[..., None] * o_perm, axis=2)  # (B,T_q,d_k)
 
-        # Project to n_emb
+        # 10. Final projection and residual dropout
         m_proj_out = self.m_proj.forward(y)  # (B,T_q,n_emb)
+
+        # 11. Dropout Residual connection
         out = self.resid_dropout.forward(m_proj_out)
 
+        # 12. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, scores, attn_weights, attn_weights_dropped, o, gate_logits, gate_probs, y)
+        
         return out
 
     def backward(self, grad_output):
@@ -193,20 +205,20 @@ class MOH(Module):
         grad_output: (B,T_q,n_emb)
         returns: grad_x, param_grads
         """
+
+        # 1. Unpack cached values
         (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, scores, attn_weights, attn_weights_d, o, gate_logits, gate_probs, y) = self._cache
 
         B = x.shape[0]
         T_q = grad_output.shape[1]
 
-        grads_all = []
-
-        # 1. Resid dropout
+        # 2. Backward through residual dropout
         grad_m_proj_out, _ = self.resid_dropout.backward(grad_output)
 
-        # 2. m_proj backward
+        # 3. Backward through final projection
         grad_y, m_proj_grads = self.m_proj.backward(grad_m_proj_out)
 
-        # 3. Mixture y = sum_h p_h * o_h
+        # 4. Backward through mixture of head outputs
         # Shapes: gate_probs (B,T_q,H), o (B,H,T_q,d_k) -> o_perm (B,T_q,H,d_k)
         H = self.n_heads
         d_k = self.d_k
@@ -221,59 +233,54 @@ class MOH(Module):
         grad_o_perm = grad_y[:, :, None, :] * gate_probs[..., None]  # (B,T_q,H,d_k)
         grad_g_proj_probs = self.mp.sum(grad_y[:, :, None, :] * o_perm, axis=-1)  # (B,T_q,H)
 
-        # 4. Softmax backward on gate logits
+        # 5. Backward through softmax on gating logits
         sum_gp = self.mp.sum(grad_g_proj_probs * gate_probs, axis=-1, keepdims=True)  # (B,T_q,1)
         grad_g_proj_logits = gate_probs * (grad_g_proj_probs - sum_gp)  # (B,T_q,H)
 
-        # 5. Backward g_proj
+        # 6. Backward through gating projection
         grad_x_g_proj, g_proj_grads = self.g_proj.backward(grad_g_proj_logits)
 
-        # 6. Backprop to o (undo transpose)
+        # 7. Backward through attention outputs
         grad_o = grad_o_perm.transpose(0,2,1,3)  # (B,H,T_q,d_k)
-
-        # 7. Backward attention matmul: o = A @ V (A=attn_weights_d)
         grad_attn_weights_d = self.mp.matmul(grad_o, V_new.transpose(0,1,3,2))
         grad_V_new = self.mp.matmul(attn_weights_d.transpose(0,1,3,2), grad_o)
 
-        # 8. Dropout on attn weights
+        # 8. Backward through attention weights dropout
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_d)
 
-        # 9. Softmax over scores
+        # 9. Backward through softmax on attention scores
         sum_aw = self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True)
         grad_scores = attn_weights * (grad_attn_weights - sum_aw)
 
-        # 10. scores = (Q K^T)/sqrt(d_k)
+        # 10. Backward through scaled dot-product attention
         scale = 1.0 / mt.sqrt(d_k)
         # grad_Q: (B,H,T_q,d_k)
         # grad_K: (B,H,T_total,d_k) but in no-cache T_total = T_q
         grad_Q = self.mp.matmul(grad_scores, K_new) * scale
         grad_K_new = self.mp.matmul(grad_scores.transpose(0,1,3,2), Q) * scale
 
-        # 11. Merge head grads back to linear input shapes
-        def un_split(z, original_shape):
-            # original_shape is a tuple like (B,T,head_size)
-            return z.transpose(0,2,1,3).reshape(original_shape)
+        # 11. Merge head gradients back to linear input shapes
+        grad_Q_lin = self.backward_unsplit_heads(grad_Q, Q_lin.shape)
+        grad_K_lin = self.backward_unsplit_heads(grad_K_new, K_lin.shape)
+        grad_V_lin = self.backward_unsplit_heads(grad_V_new, V_lin.shape)
 
-        grad_Q_lin = un_split(grad_Q, Q_lin.shape)
-        grad_K_lin = un_split(grad_K_new, K_lin.shape)
-        grad_V_lin = un_split(grad_V_new, V_lin.shape)
-
-        # 12. Backward q,k,v projections
+        # 12. Backward through Q, K, V projections
         grad_x_q, q_grads = self.q_proj.backward(grad_Q_lin)
         grad_x_k, k_grads = self.k_proj.backward(grad_K_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)
 
-        # 13. Sum gradients into x (add gate path)
+        # Sum gradients into x (add gate path)
         grad_x = grad_x_q + grad_x_k + grad_x_v + grad_x_g_proj
 
         # Assemble grads in declared parameter order
-        grads_all.extend(q_grads)
-        grads_all.extend(k_grads)
-        grads_all.extend(v_grads)
-        grads_all.extend(g_proj_grads)
-        grads_all.extend(m_proj_grads)
+        param_grads = []
+        param_grads.extend(q_grads)
+        param_grads.extend(k_grads)
+        param_grads.extend(v_grads)
+        param_grads.extend(g_proj_grads)
+        param_grads.extend(m_proj_grads)
 
-        return grad_x, grads_all
+        return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
         self.q_proj.weight = weights_dict[f'block_{i}_moh_q_weight']

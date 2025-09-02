@@ -92,26 +92,36 @@ class RFA(Module):
 
         return flops
     
+    def forward_split_heads(self, z):
+        B, T, _ = z.shape
+        return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
+
+    def backward_unsplit_heads(self, z_grad, shape):
+        return z_grad.transpose(0, 2, 1, 3).reshape(shape)
+    
     def forward(self, x, use_cache=False):
         B, T, _ = x.shape
-        Q = self.q_proj.forward(x).reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
-        K = self.k_proj.forward(x).reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
-        V = self.v_proj.forward(x).reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
 
-        # Append recurrent memory to K/V
+        # 1. Project input to Q, K, V
+        Q = self.forward_split_heads(self.q_proj.forward(x))  # Split and transpose Q
+        K = self.forward_split_heads(self.k_proj.forward(x))  # Split and transpose K
+        V = self.forward_split_heads(self.v_proj.forward(x))  # Split and transpose V
+
+        # Append recurrent memory to K/V if using cache
         if use_cache and self.k_cache is not None:
             K = self.mp.concatenate([self.k_cache, K], axis=2)
             V = self.mp.concatenate([self.v_cache, V], axis=2)
         self.k_cache = K
         self.v_cache = V      
 
-        # Compute attention scores
+        # 2. Compute attention scores
         scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)
 
-        # Get actual sequence length after KV cache append
+        # 3. Create and apply masks (local sliding window or causal mask)
         actual_seq_len = K.shape[2]
         idxs = self.mp.arange(actual_seq_len)
 
+        # Handle KV cache for inference
         if use_cache:
             # Always sliding window when using KV cache
             local_mask = (idxs[None, :] >= idxs[:, None] - self.window_size) & (idxs[None, :] <= idxs[:, None])
@@ -126,55 +136,83 @@ class RFA(Module):
             causal_mask = idxs[None, :] <= idxs[:, None]
             mask = self.mp.where(causal_mask, 0, -1e9)
 
-        # Apply mask
         masked_scores = scores + mask[None, None, :, :]
 
-        # Compute attention weights
+        # 4. Compute attention weights using softmax
         attn_weights = softmax(self.mp, masked_scores, axis=-1)
+
+        # 5. Apply dropout to attention weights
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
+        # 6. Compute weighted sum of values
         o = self.mp.matmul(attn_weights_dropped, V)
+
+        # 7. Recombine heads and reshape to (B, T, head_size)
         o_combined = o.transpose(0, 2, 1, 3).reshape(B, T, self.head_size)
+
+        # 8. Final linear projection
         out = self.c_proj.forward(o_combined)
+
+        # 9. Apply residual dropout
         out_dropped = self.resid_dropout.forward(out)
 
-        # Update recurrent memory with last token's value
+        # 10. Update recurrent memory with the last token's value
         self.memory = V[:, :, -1:, :].mean(axis=0, keepdims=True)
 
+        # 11. Cache intermediate values for backward pass (if needed)
         if self.setting:
             self._cache = (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
 
         return out_dropped
 
     def backward(self, grad_output):
+
+        # 1. Unpack cached values
         (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined) = self._cache
 
+        # 2. Handle gradients for recurrent memory
+        grad_memory = self.memory  # Gradient for recurrent memory
+        self.memory -= grad_memory  # Update memory gradient
+
+        # 3. Backward through resid_dropout
         grad_out_dropped, _ = self.resid_dropout.backward(grad_output)
+
+        # 4. Backward through c_proj (output linear layer)
         grad_o_combined, c_proj_grads = self.c_proj.backward(grad_out_dropped)
+
+        # 5. Undo reshape/transpose for o_combined to get grad_o
         B, T, _ = grad_o_combined.shape
         grad_o = grad_o_combined.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
 
+        # 6. Backward through matmul(attn_weights_dropped, V)
         grad_attn_weights_dropped = self.mp.matmul(grad_o, V.transpose(0, 1, 3, 2))
         grad_V = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_o)
+
+        # 7. Backward through attn_dropout
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_dropped)
 
+        # 8. Backward through softmax (attn_weights = softmax(masked_scores))
         grad_scores = grad_attn_weights * attn_weights - self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True) * attn_weights
+               
+        # 9. Backward through scaled dot-product: scores = (Q @ K.T) / sqrt(d_k)
         grad_Q = self.mp.matmul(grad_scores, K) / mt.sqrt(self.d_k)
         grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / mt.sqrt(self.d_k)
 
-        def un_split(z_grad, shape):
-            return z_grad.transpose(0, 2, 1, 3).reshape(shape)
+        # 10. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
+        grad_Q_orig = self.backward_unsplit_heads(grad_Q, (B, T, self.head_size))
+        grad_K_orig = self.backward_unsplit_heads(grad_K, (B, T, self.head_size))
+        grad_V_orig = self.backward_unsplit_heads(grad_V, (B, T, self.head_size))
 
-        grad_Q_orig = un_split(grad_Q, (B, T, self.head_size))
-        grad_K_orig = un_split(grad_K, (B, T, self.head_size))
-        grad_V_orig = un_split(grad_V, (B, T, self.head_size))
-
+        # 11. Backward through q_proj, k_proj, v_proj
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_orig)
         grad_x_k, k_proj_grads = self.k_proj.backward(grad_K_orig)
         grad_x_v, v_proj_grads = self.v_proj.backward(grad_V_orig)
-        grad_x = grad_x_q + grad_x_k + grad_x_v
 
-        return grad_x, q_proj_grads + k_proj_grads + v_proj_grads + c_proj_grads
+        # Combine gradients
+        grad_x = grad_x_q + grad_x_k + grad_x_v
+        param_grads = q_proj_grads + k_proj_grads + v_proj_grads + c_proj_grads
+
+        return grad_x, param_grads
 
     def from_dict(self, weights_dict, i):
         self.q_proj.weight = weights_dict[f'block_{i}_rfa_q_weight']        

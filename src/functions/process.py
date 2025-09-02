@@ -34,12 +34,16 @@ def sigmoid_prime(mp, x):
     s = 1 / (1 + mp.exp(-x))
     return s * (1 - s)
 
-# Softmax (along given axis)
 def softmax(mp, x, axis=-1):
     """Computes softmax probabilities along a given axis for numerical stability."""
     x_max = mp.max(x, axis=axis, keepdims=True)
     e_x = mp.exp(x - x_max)
     return e_x / mp.sum(e_x, axis=axis, keepdims=True)
+
+def onehot_argmax(mp, logits, n_heads):
+    idx = mp.argmax(logits, axis=-1)  # (B,T)
+    one_hot = mp.eye(n_heads)[idx]  # (B,T,H)
+    return one_hot, idx
 
 def cross_entropy_loss(mp, logits, targets):
     """

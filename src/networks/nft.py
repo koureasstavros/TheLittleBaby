@@ -6,6 +6,7 @@
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
+from src.functions.process import sigmoid
 
 class NFT(Module):
     """
@@ -103,12 +104,20 @@ class NFT(Module):
         if mode:
             self.clear_cache()
 
-    def _exp_clip(self, x):
+    def forward_exp_clip(self, x):
         return self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
+    
+    def backward_exp_clip(self, grad, x):
+        grad_x = grad * self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
+        grad_x *= (x >= -self.clip) * (x <= self.clip)  # Zero out gradients outside the range
+        return grad_x
 
-    def _sigmoid(self, x):
-        return 1.0 / (1.0 + self.mp.exp(-self.mp.clip(x, -40.0, 40.0)))
-
+    def forward_cumsum(self, x):
+        return self.mp.cumsum(x, axis=1)
+    
+    def backward_cumsum(self,g):
+        return self.mp.cumsum(g[:, ::-1, :], axis=1)[:, ::-1, :]
+    
     def forward(self, x, use_cache):
         """
         x: (B,T,D)
@@ -116,19 +125,21 @@ class NFT(Module):
         """
         B, T, D = x.shape
 
-        # Projections
+        # 1. Projections
         if self.use_gate:
-            q_lin = self.q_proj.forward(x)  # (B,T,D)
-            gate = self._sigmoid(q_lin)     # (B,T,D)
+            q_lin = self.q_proj.forward(x)          # (B,T,D)
+            gate = sigmoid(self.mp, q_lin)          # (B,T,D)
         else:
             q_lin = None
             gate = 1.0
 
+        # 2. Key/Value Projections
         k_lin = self.k_proj.forward(x)      # (B,T,D)
         v_lin = self.v_proj.forward(x)      # (B,T,D)
 
         eps = 1e-9
 
+        # Handle KV cache for inference
         if use_cache and not self.setting:
             # Streaming inference with running sums, sliding window
             from collections import deque
@@ -147,7 +158,7 @@ class NFT(Module):
             for t in range(T):
                 k_t = k_lin[:, t, :]  # (B,D)
                 v_t = v_lin[:, t, :]
-                e_t = self._exp_clip(k_t)           # (B,D)
+                e_t = self.forward_exp_clip(k_t)           # (B,D)
                 ev_t = e_t * v_t                    # (B,D)
 
                 # Maintain sliding window up to n_ctx
@@ -178,24 +189,33 @@ class NFT(Module):
             self.kv_cache = {'S': S, 'SV': SV, 'E_fifo': E_fifo, 'EV_fifo': EV_fifo}
             return out
 
-        # Training: fully vectorized prefix sums
-        E = self._exp_clip(k_lin)                       # (B,T,D)
+        # 3. Training: fully vectorized prefix sums
+        E = self.forward_exp_clip(k_lin)                # (B,T,D)
         EV = (E * v_lin)                                # (B,T,D)
-        S = self.mp.cumsum(E, axis=1)                   # (B,T,D)
-        SV = self.mp.cumsum(EV, axis=1)                 # (B,T,D)
+
+        # 4. Cumulative Sums
+        S = self.forward_cumsum(E)                      # (B,T,D)
+        SV = self.forward_cumsum(EV)                    # (B,T,D)
+
+        # 5. Compute attention scores
         s = (SV / (S + eps))                            # (B,T,D)
 
+        # 6. Dropout on s
         s_d = self.attn_dropout.forward(s)
         if self.use_gate:
             y = gate * s_d
         else:
             y = s_d
 
+        # 7. Final Linear Projection
         out = self.c_proj.forward(y)
+
+        # 8. Residual Dropout
         out = self.resid_dropout.forward(out)
 
-        # Cache for backward
+        # 9. Cache for backward
         self._cache = (x, q_lin, k_lin, v_lin, E, S, EV, SV, s, s_d, gate)
+
         return out
 
     def backward(self, grad_output):
@@ -203,51 +223,49 @@ class NFT(Module):
         grad_output: (B,T,D)
         returns: grad_x, [param_grads in order q,k,v,c]
         """
+
+        # 1. Unpack cached values
         (x, q_lin, k_lin, v_lin, E, S, EV, SV, s, s_d, gate) = self._cache
         B, T, D = x.shape
 
-        # 1) Residual dropout backward
+        # 2. Residual dropout backward
         grad_c_in, _ = self.resid_dropout.backward(grad_output)  # (B,T,D)
 
-        # 2) c_proj backward
+        # 3. c_proj backward
         grad_y, c_grads = self.c_proj.backward(grad_c_in)        # (B,T,D)
 
-        # 3) Split path: y = gate * s_d (gate=1 if disabled)
+        # 4. Split path: y = gate * s_d (gate=1 if disabled)
         if self.use_gate:
             grad_gate = grad_y * s_d                      # (B,T,D)
             grad_s_d = grad_y * gate                      # (B,T,D)
-            # gate = sigmoid(q_lin)
             sig = gate
             grad_q_lin = grad_gate * sig * (1.0 - sig)    # (B,T,D)
         else:
             grad_s_d = grad_y
             grad_q_lin = self.mp.zeros_like(grad_y)
 
-        # 4) Dropout backward on s
+        # 5. Dropout backward on s
         grad_s, _ = self.attn_dropout.backward(grad_s_d)  # (B,T,D)
 
-        # 5) s = SV / (S + eps)
+        # 6. s = SV / (S + eps)
         eps = 1e-9
         S_eps = S + eps
         grad_SV = grad_s / S_eps                          # (B,T,D)
         grad_S = -grad_s * (s / S_eps)                    # (B,T,D)
 
-        # 6) Reverse cumsum to distribute gradients to EV and E
-        def reverse_cumsum(g):
-            return self.mp.cumsum(g[:, ::-1, :], axis=1)[:, ::-1, :]
+        # 7. Reverse cumsum to distribute gradients to EV and E
+        G_SV = self.backward_cumsum(grad_SV)   # grads wrt EV
+        G_S = self.backward_cumsum(grad_S)     # grads wrt E
 
-        G_SV = reverse_cumsum(grad_SV)   # grads wrt EV
-        G_S = reverse_cumsum(grad_S)     # grads wrt E
-
-        # 7) Split EV and E
+        # 8. Split EV and E
         grad_V_lin = E * G_SV                                # (B,T,D)
         grad_E_fromSV = G_SV * v_lin                         # (B,T,D)
         grad_E = grad_E_fromSV + G_S                         # (B,T,D)
 
-        # 8) E = exp(k_lin) -> grad_k_lin = grad_E * E
-        grad_k_lin = grad_E * E                              # (B,T,D)
+        # 9. E = exp(clip(k_lin)) -> use backward_exp_clip
+        grad_k_lin = self.backward_exp_clip(grad_E, k_lin)   # (B,T,D)
 
-        # 9) Back through projections
+        # 10 Back through projections
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)
 
@@ -266,6 +284,7 @@ class NFT(Module):
         param_grads.extend(k_grads)
         param_grads.extend(v_grads)
         param_grads.extend(c_grads)
+
         return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):

@@ -104,12 +104,14 @@ class LDA(Module):
             self.clear_cache()
 
     def forward(self, x, use_cache):
-        # Project K,V
+        # 1. Project K,V
         k_lin = self.k_proj.forward(x)
         v_lin = self.v_proj.forward(x)
 
-        # Elementwise gate
+        # 2. Elementwise gate
         gated_v = k_lin * v_lin
+
+        # Handle KV cache for inference
         if use_cache and not self.setting:
             if self.kv_cache is None:
                 self.kv_cache = gated_v
@@ -125,21 +127,26 @@ class LDA(Module):
             # Use current gated_v as context during training
             context = gated_v
 
-        # Normalize context before depthwise convolution
-        norm_context = self.norm.forward(context)        
-        
+        # 3. Normalize context before depthwise convolution
+        norm_context = self.norm.forward(context)
+
+        # 4. Depthwise convolution
         mixed_conv = self.depthwise_conv.forward(norm_context)
 
-        # Add nonlinearity after depthwise convolution
+        # 5. Add nonlinearity after depthwise convolution
         mixed = relu(self.mp, mixed_conv)
 
-        # Dropout + output projection
+        # 6. Dropout + output projection
         mixed_d = self.attn_dropout.forward(mixed)
         out = self.c_proj.forward(mixed_d)
+
+        # 7. Apply residual dropout
         out = self.resid_dropout.forward(out)
 
+        # 8. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, k_lin, v_lin, gated_v, mixed)
+        
         return out
     
     def backward(self, grad_output):
@@ -148,36 +155,36 @@ class LDA(Module):
         grad_output: gradient from subsequent layer, shape (B, T, D)
         Returns: (grad_input, list_of_param_grads)
         """
+
+        # 1. Unpack cached values
         x, k_lin, v_lin, gated_v, mixed = self._cache
         param_grads = []
 
-        # 1. Backward through resid_dropout
+        # 2. Backward through resid_dropout
         grad_out, _ = self.resid_dropout.backward(grad_output)
 
-        # 2. Backward through c_proj
+        # 3. Backward through c_proj
         grad_mixed_d, c_proj_grads = self.c_proj.backward(grad_out)
 
-        # 3. Backward through attn_dropout
+        # 4. Backward through attn_dropout
         grad_mixed, _ = self.attn_dropout.backward(grad_mixed_d)
 
-        # 4. Backward through depthwise conv
+        # 5. Backward through depthwise conv
         grad_mixed = grad_mixed * relu_prime(self.mp, mixed)
         grad_norm_context, conv_grads = self.depthwise_conv.backward(grad_mixed)
 
-        # 5. Backward through normalization
+        # 6. Backward through normalization
         grad_context, norm_grads = self.norm.backward(grad_norm_context)
 
-        # 6. Backward through gating (elementwise multiply k_lin * v_lin)
+        # 7. Backward through gating (elementwise multiply k_lin * v_lin)
         grad_k_lin = grad_context * v_lin
         grad_v_lin = grad_context * k_lin
 
-        # 7. Backward through v_proj
+        # 8. Backward through k_proj, v_proj 
         grad_x_v, v_proj_grads = self.v_proj.backward(grad_v_lin)
-
-        # 8. Backward through k_proj
         grad_x_k, k_proj_grads = self.k_proj.backward(grad_k_lin)
 
-        # 9. Sum grads from both branches
+        # Sum grads from both branches
         grad_x = grad_x_v + grad_x_k
 
         # Assemble grads in same order as parameters()

@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.3
+version: v0.1.4
 ---
 
 # 👶 The Little Baby
@@ -323,7 +323,7 @@ These hyperparameters collectively define the training process, where a model's 
 
   - Values: [1 : ****]
   - What it is: The number of Transformer blocks stacked on top of each other. This defines the "depth" of the model.
-  - Size: Has a direct, linear impact on model size. Each layer adds a
+  - Size: Has a direct, linear impact on model size. Each layer adds a block with attention layers and network layers.
   - Speed: The impact is linear. Doubling n_layers will roughly double the training time and the number of model parameters, as the input data must pass through each block sequentially.
   - Quality: More layers allow the model to learn more complex and abstract features. Deeper models are generally more powerful, but also more prone to overfitting and can be harder to train (though residual connections help mitigate this).
 
@@ -386,6 +386,15 @@ Even our little language models have their favorite rules to follow—turns out,
 
   Flops are based on 6 (2 ops for forward pass and 4 ops for backward pass), Number of Tokens (T), Number of Parameters (P).
 
+- **Memory for training**
+  ```
+    4GBM = batch_size=4, n_ctx=128, n_emb=128, n_layers=4
+    8GBM = batch_size=4, n_ctx=256, n_emb=128, n_layers=4
+    16GBM = batch_size=4, n_ctx=512, n_emb=128, n_layers=4
+    8GBM = batch_size=8, n_ctx=128, n_emb=128, n_layers=4
+    16GBM = batch_size=16, n_ctx=128, n_emb=128, n_layers=4
+  ```
+
 
 ## 🏛️ Architecture
 
@@ -403,7 +412,7 @@ Attention mechanism helps a language model decide which words (or tokens) in a s
 |--------|--------------|------------|------------|------------|
 | **MHA** (Multi-Head Attention) | Separate Q, K, V per head | **O(B·T²·H·d_k)** | Standard Transformer attention; expensive for long sequences | Standard full multi‑head attention. |
 | **MOH** (Multi-Output Head) | Typically uses Q/K/V | **O(B·T²·H·d_k)** | Less common; focuses on output diversity rather than input projection | Full QKᵀ for all heads + softmax gating over heads. |
-| **GQA** (Grouped-Query Attention) | Shared K/V per group of Q heads | **O(B·T²·Hkv·d_k) with Hkv < Hq** | Trade-off between performance and efficiency; Full QKᵀ but with fewer K/V heads (shared across Q groups). |
+| **GQA** (Grouped-Query Attention) | Shared K/V per group of Q heads | **O(B·T²·Hkv·d_k) with Hkv < Hq** | Trade-off between performance and efficiency | Full QKᵀ but with fewer K/V heads (shared across Q groups). |
 | **SWH** (Sliding Window Attention) | Uses Q/K/V within local window | **O(B·T²·H·d_k)** | Limits attention to nearby tokens; efficient for long sequences | Full QKᵀ per head but only one head output is used per token (top‑1 gating). Still computes all heads. |
 | **AFT** (Attention-Free Transformer) | No K/V; uses learned positional bias | **O(B·T·D)** | Removes attention entirely; uses element-wise operations and bias terms | Only k_proj, v_proj, elementwise exp/clip, cumsum, division, c_proj. No QKᵀ. |
 | **LDA** (Linear Diagonal Attention) | Shared Q/K; diagonal-only interaction | **O(B·T·D)** | Lightweight attention using only diagonal of QKᵀ; fast and memory-efficient | Computes only Qᵢ·Kᵢ for each token *i* (no pairwise attention); often gated with sigmoid or swish. |
@@ -473,6 +482,12 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.72s | 11965s | 11965s | 29s | 29.8/100 | 56,531,116 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 35976s | 35976s | 22s | 22.1/100 | 112,003,504 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5 |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 36733s | 36733s | 19s | 40.5/100 | 111,977,971 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.75s | 12442s | 12442s | 9s | 31.4/100 | 81,998,967 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.76s | 12536s | 12536s | 22s | 22.7/100 | 81,799,112 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.59s | 26267s | 26267s | 26s | 36.7/100 | 162,674,522 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.64s | 27285s | 27285s | 20s | 33.6/100 | 162,413,666 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.68s | 95355s | 95355s | 61s | 42.3/100 | 324,685,161 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.18s | 103253s | 103253s | 57s | 49.4/100 | 324,595,702 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.15s | 3471s | 3471s | 10s | 9.0/100 | 9,741,653 | 212579 | baa3da3a-353f-40f5-9e02-f44fb406e05c |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.15s | 3411s | 3411s | 7s | 19.1/100 | 9,725,614 | 212579 | baa3da3a-353f-40f5-9e02-f44fb406e05c_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | gqa | lor | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.41s | 6917s | 6917s | 12s | 17.1/100 | 18,030,110 | 383075 | 16915fef-a3db-4749-9f0f-c17987fd3aa1 |
@@ -491,12 +506,12 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.22s | 3515s | 3515s | 11s | 6.2/100 | 24,517,655 | 715875 | 88673f38-f950-42b2-a2aa-b365e7b53e69_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.46s | 7570s | 7570s | 18s | 5.0/100 | 50,456,101 | 1389667 | 84a9d1c0-ba94-4244-b64e-c7fbaf101671 |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.44s | 7250s | 7250s | 18s | 5.0/100 | 46,811,224 | 1389667 | 84a9d1c0-ba94-4244-b64e-c7fbaf101671_finetuned |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.75s | 12442s | 12442s | 9s | 31.4/100 | 81,998,967 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33 |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.76s | 12536s | 12536s | 22s | 22.7/100 | 81,799,112 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33_finetuned |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.59s | 26267s | 26267s | 26s | 36.7/100 | 162,674,522 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 1.64s | 27285s | 27285s | 20s | 33.6/100 | 162,413,666 | 8898659 | ec9c5de4-751c-49b3-a682-11ecf16feb4e_finetuned |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.68s | 95355s | 95355s | 61s | 42.3/100 | 324,685,161 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662 |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 6.18s | 103253s | 103253s | 57s | 49.4/100 | 324,595,702 | 17755235 | 9b66418d-36bd-4e21-89e3-f897083b6662_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.23s | 3948s | 3948s | 16s | 19.1/100 | 11,820,689 | 339555 | 2ce1c123-0db0-44bc-b17f-d9cf22a05aab |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.26s | 5282s | 5282s | 7s | 12.5/100 | 11,779,646 | 339555 | 2ce1c123-0db0-44bc-b17f-d9cf22a05aab_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.63s | 10414s | 10414s | 16s | 5.0/100 | 22,177,690 | 637027 | 57d57b9b-ec1c-4f19-acc0-d14d20de8b09 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.45s | 7578s | 7578s | 20s | 23.5/100 | 22,177,690 | 637027 | 57d57b9b-ec1c-4f19-acc0-d14d20de8b09_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.03s | 18944s | 18944s | 30s | 16.4/100 | 42,913,724 | 1231971 | f67f0ad3-d80a-468a-9fbe-29b9e6f1d50e |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.59s | 27362s | 27362s | 62s | 20.2/100 | 42,765,026 | 1231971 | f67f0ad3-d80a-468a-9fbe-29b9e6f1d50e_finetuned |
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 

@@ -23,7 +23,7 @@ class Attention:
             case "swh":
                 return SWH(mp, n_ctx, n_emb, p_dropout, head_size, n_heads)
             case "aft":
-                return AFT(mp, n_ctx, n_emb, p_dropout)
+                return AFT(mp, n_ctx, n_emb, p_dropout, clip=20.0)
             case "lda":
                 return LDA(mp, n_ctx, n_emb, p_dropout, kernel_size=8)
             case "rfa":

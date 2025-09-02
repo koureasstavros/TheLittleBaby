@@ -83,30 +83,35 @@ class MOE(Module):
         """
         B, T, D = x.shape
 
-        # Gating
-        gate_logits = self.g_proj.forward(x)          # (B,T,E)
-        gate_probs = softmax(self.mp, gate_logits, axis=-1)  # (B,T,E)
+        # 1. Gating
+        gate_logits = self.g_proj.forward(x)                    # (B,T,E)
 
-        # Experts forward (dense: compute all)
+        # 2. Compute gate probabilities
+        gate_probs = softmax(self.mp, gate_logits, axis=-1)     # (B,T,E)
+
+        # 3. Experts forward (dense: compute all)
         expert_fc = []
         expert_gelu = []
         expert_out = []
         for e in range(self.n_experts):
-            fc = self.c_proj_up[e].forward(x)             # (B,T,exp*D)
+            fc = self.c_proj_up[e].forward(x)                   # (B,T,exp*D)
             g  = gelu(self.mp, fc)
-            o  = self.c_proj_dn[e].forward(g)           # (B,T,D)
+            o  = self.c_proj_dn[e].forward(g)                   # (B,T,D)
             expert_fc.append(fc); expert_gelu.append(g); expert_out.append(o)
 
-        # Stack: (E,B,T,D) -> (B,T,E,D)
+        # 4. Stack: (E,B,T,D) -> (B,T,E,D)
         expert_out_stacked = self.mp.stack(expert_out, axis=0).transpose(1,2,0,3)
 
-        # Weighted sum over experts
+        # 5. Weighted sum over experts
         y = self.mp.sum(gate_probs[..., None] * expert_out_stacked, axis=2)  # (B,T,D)
+
+        # 6. Apply dropout
         y = self.p_dropout.forward(y)
 
-        # Cache for backward
+        # 7. Cache for backward
         self._cache = (x, gate_logits, gate_probs,
                        expert_fc, expert_gelu, expert_out, expert_out_stacked)
+        
         return y
 
     def backward(self, grad_output):
@@ -114,36 +119,38 @@ class MOE(Module):
         grad_output: (B,T,D)
         returns: (grad_x, param_grads_list)
         """
+
+        # 1. Unpack cached values
         x, gate_logits, gate_probs, expert_fc, expert_gelu, expert_out, expert_out_stacked = self._cache
         B, T, D = x.shape
         E = self.n_experts
 
-        # 1. Dropout backward
+        # 2. Dropout backward
         grad_y, _ = self.p_dropout.backward(grad_output)  # (B,T,D)
 
-        # 2. Grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
+        # 3. Grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
         # For each expert e: contribution scaled by p_e
         grad_expert_out = []  # list of (B,T,D)
         for e in range(E):
             grad_expert_out.append(grad_y * gate_probs[..., e:e+1])
 
-        # 3. Grad wrt gate probs: dL/dp_e = dot(grad_y, o_e) over hidden dim
+        # 4. Grad wrt gate probs: dL/dp_e = dot(grad_y, o_e) over hidden dim
         # expert_out[e]: (B,T,D)
         gate_upstream = []
         for e in range(E):
             gate_upstream.append(self.mp.sum(grad_y * expert_out[e], axis=-1))  # (B,T)
         gate_upstream = self.mp.stack(gate_upstream, axis=-1)  # (B,T,E)
 
-        # 4. Softmax backward: p = softmax(z)
+        # 5. Softmax backward: p = softmax(z)
         # dL/dz = p * (dL/dp - sum_e dL/dp_e * p_e)
         sum_term = self.mp.sum(gate_upstream * gate_probs, axis=-1, keepdims=True)
         grad_g_proj_logits = gate_probs * (gate_upstream - sum_term)  # (B,T,E)
 
-        # 5. Backward gate linear
+        # 6. Backward gate linear
         grad_x_g_proj, gate_param_grads = self.g_proj.backward(grad_g_proj_logits)  # grad_x_g_proj: (B,T,D)
 
-        # 6. Backward each expert (down then gelu then up)
-        grad_x_total = grad_x_g_proj.copy()
+        # 7. Backward each expert (down then gelu then up)
+        grad_x = grad_x_g_proj.copy()
         expert_param_grads_flat = []
         for e in range(E):
             # Down projection backward
@@ -155,7 +162,7 @@ class MOE(Module):
             # Up projection backward
             grad_x_e, up_grads = self.c_proj_up[e].backward(grad_fc)
 
-            grad_x_total += grad_x_e
+            grad_x += grad_x_e
             # Maintain ordering: up, down per expert
             expert_param_grads_flat.extend(up_grads)
             expert_param_grads_flat.extend(down_grads)
@@ -163,7 +170,8 @@ class MOE(Module):
         # Assemble grads (must match parameters() order):
         # gate params first, then each expert's up then down
         param_grads = gate_param_grads + expert_param_grads_flat
-        return grad_x_total, param_grads
+
+        return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
         self.g_proj.weight = weights_dict[f'block_{i}_moe_g_weight']        

@@ -68,8 +68,15 @@ class GGL(Module):
         return flops
     
     def forward(self, x):
+        """
+        Forward pass for GGL.
+        """
+
+        # 1. Split input into groups:
         B, T, D = x.shape
         groups = self.mp.split(x, self.n_groups, axis=2)
+
+        # 2. Process each group
         outputs = []
         gate_pre_acts = []  # store raw gate outputs before sigmoid
         for i in range(self.n_groups):
@@ -78,18 +85,36 @@ class GGL(Module):
             gate = sigmoid(self.mp, gate_raw)
             outputs.append(h * gate)
             gate_pre_acts.append(gate_raw)
+
+        # 3. Merge groups and apply dropout
         out = self.mp.concatenate(outputs, axis=2)
+
+        # 4. Apply dropout
         out = self.dropout.forward(out)
+
+        # 5. Cache intermediate results if needed
         if self.setting:
             self._cache = (x, groups, outputs, gate_pre_acts)
+
         return out
 
     def backward(self, grad_output):
+        """
+        Backward pass for GGL.
+        """
+
+        # 1. Unpack cached values
+        _, _, _, gate_pre_acts = self._cache
+
+        # 2. Backward through dropout
         grad_out, _ = self.dropout.backward(grad_output)
+
+        # 3. Split gradient into groups
         grad_groups = self.mp.split(grad_out, self.n_groups, axis=2)
         grad_x_parts = []
-        grads_all = []
-        _, _, _, gate_pre_acts = self._cache
+        param_grads = []
+
+        # 4. Backward through each group
         for i in range(self.n_groups):
             grad_h = grad_groups[i]
             grad_gate = grad_groups[i]
@@ -98,9 +123,12 @@ class GGL(Module):
             grad_x_l, l_grads = self.linears[i].backward(grad_h_in)
             grad_x_g, g_grads = self.gates[i].backward(grad_gate_in)
             grad_x_parts.append(grad_x_l + grad_x_g)
-            grads_all += l_grads + g_grads
+            param_grads += l_grads + g_grads
+
+        # 5. Merge gradients from all groups
         grad_x = self.mp.concatenate(grad_x_parts, axis=2)
-        return grad_x, grads_all
+
+        return grad_x, param_grads
 
     def from_dict(self, weights_dict, i):
         for group_idx in range(self.n_groups):

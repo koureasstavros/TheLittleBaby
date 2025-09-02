@@ -15,11 +15,12 @@ class AFT(Module):
     - Inference: running sums S, SV with sliding window up to n_ctx
     Params order (unchanged): q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, p_dropout):
+    def __init__(self, mp, n_ctx, n_emb, p_dropout, clip):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
+        self.clip = clip
 
         # Projections
         self.q_proj = Linear(mp, n_emb, n_emb, bias=False)  # kept for parameter order, unused in forward
@@ -94,9 +95,21 @@ class AFT(Module):
         if mode:
             self.clear_cache()
 
-    def _exp_clip(self, x):
-        return self.mp.exp(self.mp.clip(x, -20.0, 20.0))
+    def forward_exp_clip(self, x):
+        return self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
 
+    def backward_exp_clip(self, grad, x):
+        # Gradient is grad_E * exp(k_lin) within the clipping range, 0 otherwise
+        grad_x = grad * self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
+        grad_x *= (x >= -self.clip) * (x <= self.clip)  # Zero out gradients outside the range
+        return grad_x
+
+    def forward_cumsum(self, x):
+        return self.mp.cumsum(x, axis=1)
+    
+    def backward_cumsum(self, g):
+        return self.mp.cumsum(g[:, ::-1, :], axis=1)[:, ::-1, :]
+    
     def forward(self, x, use_cache):
         """
         x: (B,T,D)
@@ -104,12 +117,13 @@ class AFT(Module):
         """
         B, T, D = x.shape
 
+        # 1. Project input to K, V
         # Only K and V projections are used
         k_lin = self.k_proj.forward(x)  # (B,T,D)
         v_lin = self.v_proj.forward(x)  # (B,T,D)
 
+        # Handle KV cache for inference
         if use_cache and not self.setting:
-            # Inference with running sums and sliding window
             if self.kv_cache is None:
                 S = self.mp.zeros((B, D), dtype=k_lin.dtype)
                 SV = self.mp.zeros((B, D), dtype=k_lin.dtype)
@@ -126,10 +140,9 @@ class AFT(Module):
             for t in range(T):
                 k_t = k_lin[:, t, :]
                 v_t = v_lin[:, t, :]
-                e_t = self._exp_clip(k_t)
+                e_t = self.forward_exp_clip(k_t)
                 ev_t = e_t * v_t
 
-                # Sliding window of length n_ctx
                 if self.n_ctx is not None and len(E_fifo) >= self.n_ctx:
                     oldest_e = E_fifo.pop(0)
                     oldest_ev = EV_fifo.pop(0)
@@ -145,29 +158,47 @@ class AFT(Module):
                 y_t = s_t  # gate=1
                 y_list.append(y_t[:, None, :])
 
+            # 1.2. Concatenate results and apply output projection
             y = self.mp.concatenate(y_list, axis=1)      # (B,T_q,D)
+
+            # 1.3. Apply output projection and residual dropout
             out = self.c_proj.forward(y)
+
+            # 1.4. Apply residual dropout
             out = self.resid_dropout.forward(out)
 
+            # 1.5. Update KV cache
             self.kv_cache = {'S': S, 'SV': SV, 'E_fifo': E_fifo, 'EV_fifo': EV_fifo}
             return out
 
-        # Training: prefix sums
+        # 3. Compute E = exp(K) and prefix sums S
         eps = 1e-9
-        E = self._exp_clip(k_lin)            # (B,T,D)
-        S = self.mp.cumsum(E, axis=1)             # (B,T,D)
+        E = self.forward_exp_clip(k_lin)            # (B,T,D)
+        S = self.mp.forward_cumsum(E)        # (B,T,D)
+
+        # 4. Compute E * V
         EV = E * v_lin                       # (B,T,D)
-        SV = self.mp.cumsum(EV, axis=1)           # (B,T,D)
+        SV = self.forward_cumsum(EV)      # (B,T,D)
+
+        # 5. Compute prefix sums for V
         s = SV / (S + eps)                   # (B,T,D)
 
+        # 6. Apply dropout
         s_d = self.attn_dropout.forward(s)
+
+        # 7. Residual connection
         c_in = s_d                           # gate=1
 
+        # 8. Final linear projection
         out = self.c_proj.forward(c_in)
+
+        # 9. Apply residual dropout
         out = self.resid_dropout.forward(out)
 
-        # Cache for backward
-        self._cache = (x, k_lin, v_lin, E, S, EV, SV, s, s_d)
+        # 10. Cache intermediate values for backward pass
+        if self.setting:
+            self._cache = (x, k_lin, v_lin, E, S, EV, SV, s, s_d)
+        
         return out
 
     def backward(self, grad_output):
@@ -175,53 +206,54 @@ class AFT(Module):
         grad_output: (B,T,D)
         returns: grad_x, [param_grads in order q,k,v,c]
         """
+
+        # 1. Unpack cached values
         (x, k_lin, v_lin, E, S, EV, SV, s, s_d) = self._cache
         B, T, D = x.shape
 
-        # 1) Residual dropout backward
+        # 2. Residual dropout backward
         grad_c_out, _ = self.resid_dropout.backward(grad_output)
 
-        # 2) c_proj backward
+        # 3. c_proj backward
         grad_c_in, c_grads = self.c_proj.backward(grad_c_out)  # (B,T,D)
 
-        # 3) Since c_in = s_d (gate=1), grad_s_d = grad_c_in
+        # 4. Since c_in = s_d (gate=1), grad_s_d = grad_c_in
         grad_s_d = grad_c_in
 
-        # 4) Dropout backward on s
+        # 5. Dropout backward on s
         grad_s, _ = self.attn_dropout.backward(grad_s_d)
 
-        # 5) s = SV / (S + eps)
+        # 6. s = SV / (S + eps)
         eps = 1e-9
         S_eps = S + eps
         grad_SV = grad_s / S_eps
         grad_S = -grad_s * (s / S_eps)
 
-        # 6) Backprop through cumulative sums (reverse cumsum)
-        def reverse_cumsum(g):
-            return self.mp.cumsum(g[:, ::-1, :], axis=1)[:, ::-1, :]
-
-        G_SV = reverse_cumsum(grad_SV)   # grads wrt EV
-        G_S = reverse_cumsum(grad_S)     # grads wrt E
-
-        # 7) Split EV and E
+        # 7. Backprop through cumulative sums (reverse cumsum)
+        G_SV = self.backward_cumsum(grad_SV)   # grads wrt EV
         grad_V = E * G_SV
         grad_E_fromSV = G_SV * v_lin
+
+        # 8. Backprop through cumulative sums (reverse cumsum)
+        G_S = self.backward_cumsum(grad_S)     # grads wrt E
         grad_E = grad_E_fromSV + G_S
 
-        # 8) E = exp(k_lin) -> grad_k_lin = grad_E * E
-        grad_k_lin = grad_E * E
+        # 9. E = exp(k_lin) -> grad_k_lin = grad_E * E
+        grad_k_lin = self.backward_exp_clip(grad_E, k_lin)
 
-        # 9) Back through k_proj, v_proj (no q_proj path)
+        # 10. Back through k_proj, v_proj (no q_proj path)
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V)
 
+        # Combine gradients
         grad_x = grad_x_k + grad_x_v
 
-        # 10) Assemble param grads in order: q, k, v, c
+        # Assemble param grads in order: q, k, v, c
         # q grads are zeros (q is unused in forward)
         q_weight = self.q_proj.weight
         q_grads = [self.mp.zeros_like(q_weight)]
 
+        # Assemble grads in declared parameter order
         param_grads = []
         param_grads.extend(q_grads)
         param_grads.extend(k_grads)

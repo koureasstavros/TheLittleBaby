@@ -80,19 +80,19 @@ class LOR(Module):
         x: (B, T, n_emb)
         returns: (B, T, n_out)
         """
-        self._cache_x = x
 
-        # Base frozen projection
+        # 1. Base frozen projection
         base_out = self.c_proj.forward(x)
 
-        # LoRA adaptation
+        # 2. LoRA adaptation
         lora_out = self.c_proj_up.forward(self.c_proj_dn.forward(x)) * self.scaling
 
-        # Combine and apply dropout
+        # 3. Combine and apply dropout
         out = base_out + lora_out
+
+        # 4. Apply dropout
         out = self.p_dropout.forward(out)
 
-        self._cache = (base_out, lora_out)
         return out
 
     def backward(self, grad_output):
@@ -100,21 +100,18 @@ class LOR(Module):
         Backward pass for LoRA.
         Returns: (grad_x, param_grads)
         """
-        x = self._cache_x
 
-        # Backward through dropout
+        # 1. Backward through dropout
         grad_combined, _ = self.p_dropout.backward(grad_output)
 
-        # Split gradient for LoRA path (base_proj is frozen, so no grads)
+        # 2. Split gradient for LoRA path (base_proj is frozen, so no grads)
         grad_lora = grad_combined
 
-        # Backward through LoRA B
+        # 3. Backward through LoRA
         grad_A_out, c_proj_up_grads = self.c_proj_up.backward(grad_lora * self.scaling)
-
-        # Backward through LoRA A
         grad_x_lora, c_proj_dn_grads = self.c_proj_dn.backward(grad_A_out)
 
-        # Gradient through base_proj (ignored for params, but needed for grad_x)
+        # 4. Gradient through base_proj (ignored for params, but needed for grad_x)
         grad_x_base, _ = self.c_proj.backward(grad_combined)
 
         # Total grad_x
@@ -122,6 +119,7 @@ class LOR(Module):
 
         # Only LoRA params are trainable
         param_grads = c_proj_dn_grads + c_proj_up_grads
+
         return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):

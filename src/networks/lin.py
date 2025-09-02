@@ -79,24 +79,38 @@ class LIN(Module):
         x: (B,T,D)
         returns: (B,T,D)
         """
-        self._cache_x = x
-        self._cache_c_out = self.c_proj.forward(x)
+
+        # 1. Main projection
+        self._cache_c_lin = self.c_proj.forward(x)
+
+        # 2. Optional gating
         if self.use_gate:
             self._cache_g_lin = self.g_proj.forward(x)
             gate = sigmoid(self.mp, self._cache_g_lin)
-            out = self._cache_c_out * gate
+            out = self._cache_c_lin * gate
         else:
-            out = self._cache_c_out
+            out = self._cache_c_lin
+
+        # 3. Apply dropout
         out = self.p_dropout.forward(out)
-        self._cache_out = out
+
         return out
 
     def backward(self, grad_output):
+        """
+        Backward pass:
+        grad_output: Gradient of the output
+        Returns: (grad_x, param_grads)
+        """
+
+        # 1. Backward through dropout
         grad_out, _ = self.p_dropout.backward(grad_output)
+
+        # 2. Optional gating
         if self.use_gate:
             g_sig = sigmoid(self.mp, self._cache_g_lin)
             grad_c_out = grad_out * g_sig
-            grad_g_sig = grad_out * self._cache_c_out
+            grad_g_sig = grad_out * self._cache_c_lin
             grad_g_lin = grad_g_sig * g_sig * (1 - g_sig)
             grad_x_c, c_proj_grads = self.c_proj.backward(grad_c_out)
             grad_x_g, g_proj_grads = self.g_proj.backward(grad_g_lin)
@@ -105,6 +119,7 @@ class LIN(Module):
         else:
             grad_x, c_proj_grads = self.c_proj.backward(grad_out)
             param_grads = c_proj_grads
+
         return grad_x, param_grads
 
     def from_dict(self, weights_dict, i):
