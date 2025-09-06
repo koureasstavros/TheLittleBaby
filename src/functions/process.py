@@ -29,9 +29,8 @@ def sigmoid(mp, x):
     """Compute the sigmoid activation function."""
     return 1 / (1 + mp.exp(-x))
 
-def sigmoid_prime(mp, x):
+def sigmoid_prime(mp, s):
     """Derivative of the sigmoid function."""
-    s = 1 / (1 + mp.exp(-x))
     return s * (1 - s)
 
 def softmax(mp, x, axis=-1):
@@ -40,10 +39,43 @@ def softmax(mp, x, axis=-1):
     e_x = mp.exp(x - x_max)
     return e_x / mp.sum(e_x, axis=axis, keepdims=True)
 
+def softmax_prime(mp, grad_out, softmax_out):
+    sum_term = mp.sum(grad_out * softmax_out, axis=-1, keepdims=True)
+    return  softmax_out * (grad_out - sum_term)
+
 def onehot_argmax(mp, logits, n_heads):
     idx = mp.argmax(logits, axis=-1)  # (B,T)
     one_hot = mp.eye(n_heads)[idx]  # (B,T,H)
     return one_hot, idx
+
+def cosine_similarity(mp, A, B):
+    # A: (B, T, D), B: (B, 1, D)
+    dot = mp.sum(A * B, axis=-1, keepdims=True)
+    normA = mp.sqrt(mp.sum(A * A, axis=-1, keepdims=True) + 1e-6)
+    normB = mp.sqrt(mp.sum(B * B, axis=-1, keepdims=True) + 1e-6)
+    return dot / (normA * normB)
+
+def cosine_similarity_prime(mp, grad_out, a, b, eps=1e-8):
+    """
+    Backward pass for cosine similarity.
+    a: (B, T, D)
+    b: (B, 1, D)
+    grad_out: gradient wrt output of cosine_similarity (B, T, 1)
+    Returns: grad_a, grad_b
+    """
+    a_norm = mp.sqrt(mp.sum(a * a, axis=-1, keepdims=True) + eps)
+    b_norm = mp.sqrt(mp.sum(b * b, axis=-1, keepdims=True) + eps)
+    dot = mp.sum(a * b, axis=-1, keepdims=True)
+    sim = dot / (a_norm * b_norm)
+
+    grad_dot = grad_out / (a_norm * b_norm)
+    grad_a_norm = - (dot / (a_norm**3 * b_norm)) * grad_out
+    grad_b_norm = - (dot / (b_norm**3 * a_norm)) * grad_out
+
+    grad_a = grad_dot * b + grad_a_norm * a
+    grad_b = grad_dot * a + grad_b_norm * b
+
+    return grad_a, grad_b
 
 def cross_entropy_loss(mp, logits, targets):
     """

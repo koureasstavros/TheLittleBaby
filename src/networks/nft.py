@@ -6,7 +6,7 @@
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import sigmoid
+from src.functions.process import sigmoid, sigmoid_prime
 
 class NFT(Module):
     """
@@ -134,7 +134,6 @@ class NFT(Module):
             q_lin = None
             gate = 1.0
 
-        # 2. Key/Value Projections
         k_lin = self.k_proj.forward(x)      # (B,T,D)
         v_lin = self.v_proj.forward(x)      # (B,T,D)
 
@@ -190,25 +189,27 @@ class NFT(Module):
             self.kv_cache = {'S': S, 'SV': SV, 'E_fifo': E_fifo, 'EV_fifo': EV_fifo}
             return out
 
-        # 3. Training: fully vectorized prefix sums
+        # 2. Training: fully vectorized prefix sums
         E = self.forward_exp_clip(k_lin)                # (B,T,D)
-        EV = (E * v_lin)                                # (B,T,D)
 
-        # 4. Cumulative Sums
+        # 3. Cumulative Sums
+        EV = (E * v_lin)                                # (B,T,D)
         S = self.forward_cumsum(E)                      # (B,T,D)
         SV = self.forward_cumsum(EV)                    # (B,T,D)
 
-        # 5. Compute attention scores
+        # 4. Compute attention scores
         s = (SV / (S + eps))                            # (B,T,D)
 
-        # 6. Dropout on s
+        # 5. Dropout on s
         s_d = self.attn_dropout.forward(s)
+
+        # 6. Apply gating
         if self.use_gate:
             y = gate * s_d
         else:
             y = s_d
 
-        # 7. Final Linear Projection
+        # 7. Final Projection
         out = self.c_proj.forward(y)
 
         # 8. Residual Dropout
@@ -229,10 +230,10 @@ class NFT(Module):
         (x, q_lin, k_lin, v_lin, E, S, EV, SV, s, s_d, gate) = self._cache
         B, T, D = x.shape
 
-        # 2. Residual dropout backward
+        # 2. Backward through residual dropout
         grad_c_in, _ = self.resid_dropout.backward(grad_output)  # (B,T,D)
 
-        # 3. c_proj backward
+        # 3. Backward through final projection
         grad_y, c_grads = self.c_proj.backward(grad_c_in)        # (B,T,D)
 
         # 4. Split path: y = gate * s_d (gate=1 if disabled)
@@ -240,12 +241,12 @@ class NFT(Module):
             grad_gate = grad_y * s_d                      # (B,T,D)
             grad_s_d = grad_y * gate                      # (B,T,D)
             sig = gate
-            grad_q_lin = grad_gate * sig * (1.0 - sig)    # (B,T,D)
+            grad_q_lin = grad_gate * sigmoid_prime(self.mp, sig)    # (B,T,D)
         else:
             grad_s_d = grad_y
             grad_q_lin = self.mp.zeros_like(grad_y)
 
-        # 5. Dropout backward on s
+        # 5. Backward through dropout on s
         grad_s, _ = self.attn_dropout.backward(grad_s_d)  # (B,T,D)
 
         # 6. s = SV / (S + eps)
@@ -254,19 +255,18 @@ class NFT(Module):
         grad_SV = grad_s / S_eps                          # (B,T,D)
         grad_S = -grad_s * (s / S_eps)                    # (B,T,D)
 
-        # 7. Reverse cumsum to distribute gradients to EV and E
+        # 7. Backward through reverse cumsum to distribute gradients to EV and E
         G_SV = self.backward_cumsum(grad_SV)   # grads wrt EV
         G_S = self.backward_cumsum(grad_S)     # grads wrt E
 
-        # 8. Split EV and E
         grad_V_lin = E * G_SV                                # (B,T,D)
         grad_E_fromSV = G_SV * v_lin                         # (B,T,D)
         grad_E = grad_E_fromSV + G_S                         # (B,T,D)
 
-        # 9. E = exp(clip(k_lin)) -> use backward_exp_clip
+        # 8. Backward through E = exp(clip(k_lin)) -> use backward_exp_clip
         grad_k_lin = self.backward_exp_clip(grad_E, k_lin)   # (B,T,D)
 
-        # 10 Back through projections
+        # 9 Back through projections
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)
 
@@ -277,6 +277,7 @@ class NFT(Module):
             q_grads = [self.mp.zeros_like(self.q_proj.weight)]
             grad_x_q = self.mp.zeros_like(grad_x_k)
 
+        # Assemble grad
         grad_x = grad_x_k + grad_x_v + grad_x_q
 
         # Assemble grads in order: q, k, v, c
@@ -300,7 +301,7 @@ class NFT(Module):
         self.v_proj.synchronize()
         self.c_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_nft_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_nft_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_nft_v_weight'] = self.v_proj.weight

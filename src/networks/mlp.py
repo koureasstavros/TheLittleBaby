@@ -133,7 +133,7 @@ class MLP(Module):
         self.c_proj_up.synchronize()
         self.c_proj_dn.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_mlp_proj_up_weight'] = self.c_proj_up.weight
         weights_dict[f'block_{i}_mlp_proj_up_bias'] = self.c_proj_up.bias
         weights_dict[f'block_{i}_mlp_proj_dn_weight'] = self.c_proj_dn.weight

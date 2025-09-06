@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax
+from src.functions.process import softmax, softmax_prime
 
 class MOH(Module):
     """
@@ -170,7 +170,7 @@ class MOH(Module):
     
         masked_scores = scores + mask  # broadcast (T or T_q, actual_seq_len)
 
-        # 5. Compute attention weights
+        # 5. Compute attention scores
         attn_weights = softmax(self.mp, masked_scores, axis=-1)  # (B,H,T_q,actual_seq_len)
 
         # 6. Apply dropout
@@ -182,19 +182,21 @@ class MOH(Module):
         # 8. Compute gating logits and probabilities
         x_g_proj = x if (not use_cache or self.setting or T == o.shape[2]) else x[:, -o.shape[2]:, :]
         gate_logits = self.g_proj.forward(x_g_proj)  # (B,T_q,H)
+
+        # 9. Softmax over gating logits
         gate_probs = softmax(self.mp, gate_logits, axis=-1)    # (B,T_q,H)
 
-        # 9. Compute mixture of head outputs
+        # 10. Compute mixture of head outputs
         o_perm = o.transpose(0,2,1,3)  # (B,T_q,H,d_k)
         y = self.mp.sum(gate_probs[..., None] * o_perm, axis=2)  # (B,T_q,d_k)
 
-        # 10. Final projection and residual dropout
+        # 11. Final projection
         m_proj_out = self.m_proj.forward(y)  # (B,T_q,n_emb)
 
-        # 11. Dropout Residual connection
+        # 12. Dropout residual connection
         out = self.resid_dropout.forward(m_proj_out)
 
-        # 12. Cache intermediate values for backward pass
+        # 13. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, scores, attn_weights, attn_weights_dropped, o, gate_logits, gate_probs, y)
         
@@ -223,17 +225,13 @@ class MOH(Module):
         H = self.n_heads
         d_k = self.d_k
         o_perm = o.transpose(0,2,1,3)  # (B,T_q,H,d_k)
-
-        # grad_y: (B,T_q,d_k)
         grad_g_proj_probs = self.mp.zeros((B,T_q,H))
         grad_o_perm = self.mp.zeros_like(o_perm)
 
+        # 5. Backward through softmax on gating logits and probabilities
         # For each head: grad_o_h += grad_y * p_h; grad_p_h += dot(grad_y, o_h)
-        # Vectorized:
         grad_o_perm = grad_y[:, :, None, :] * gate_probs[..., None]  # (B,T_q,H,d_k)
         grad_g_proj_probs = self.mp.sum(grad_y[:, :, None, :] * o_perm, axis=-1)  # (B,T_q,H)
-
-        # 5. Backward through softmax on gating logits
         sum_gp = self.mp.sum(grad_g_proj_probs * gate_probs, axis=-1, keepdims=True)  # (B,T_q,1)
         grad_g_proj_logits = gate_probs * (grad_g_proj_probs - sum_gp)  # (B,T_q,H)
 
@@ -241,7 +239,7 @@ class MOH(Module):
         grad_x_g_proj, g_proj_grads = self.g_proj.backward(grad_g_proj_logits)
 
         # 7. Backward through attention outputs
-        grad_o = grad_o_perm.transpose(0,2,1,3)  # (B,H,T_q,d_k)
+        grad_o = grad_o_perm.transpose(0,2,1,3)  # (B,H,T_q,d_k)        
         grad_attn_weights_d = self.mp.matmul(grad_o, V_new.transpose(0,1,3,2))
         grad_V_new = self.mp.matmul(attn_weights_d.transpose(0,1,3,2), grad_o)
 
@@ -249,22 +247,24 @@ class MOH(Module):
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_d)
 
         # 9. Backward through softmax on attention scores
-        sum_aw = self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True)
-        grad_scores = attn_weights * (grad_attn_weights - sum_aw)
+        grad_masked_scores = softmax_prime(self.mp, grad_attn_weights, attn_weights)
 
-        # 10. Backward through scaled dot-product attention
+        # 10. Backward through causal_mask (causal_mask is constant, so its gradient is 0)
+        grad_scores = grad_masked_scores
+
+        # 11. Backward through scaled dot-product attention
         scale = 1.0 / mt.sqrt(d_k)
         # grad_Q: (B,H,T_q,d_k)
         # grad_K: (B,H,T_total,d_k) but in no-cache T_total = T_q
         grad_Q = self.mp.matmul(grad_scores, K_new) * scale
         grad_K_new = self.mp.matmul(grad_scores.transpose(0,1,3,2), Q) * scale
 
-        # 11. Merge head gradients back to linear input shapes
+        # 12. Merge head gradients back to linear input shapes
         grad_Q_lin = self.backward_unsplit_heads(grad_Q, Q_lin.shape)
         grad_K_lin = self.backward_unsplit_heads(grad_K_new, K_lin.shape)
         grad_V_lin = self.backward_unsplit_heads(grad_V_new, V_lin.shape)
 
-        # 12. Backward through Q, K, V projections
+        # 13. Backward through Q, K, V projections
         grad_x_q, q_grads = self.q_proj.backward(grad_Q_lin)
         grad_x_k, k_grads = self.k_proj.backward(grad_K_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)
@@ -296,7 +296,7 @@ class MOH(Module):
         self.g_proj.synchronize()
         self.m_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_moh_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_moh_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_moh_v_weight'] = self.v_proj.weight

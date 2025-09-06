@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.6
+version: v0.1.7
 ---
 
 # 👶 The Little Baby
@@ -319,7 +319,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Speed: The impact is linear. Doubling n_layers will roughly double the training time and the number of model parameters, as the input data must pass through each block sequentially.
   - Quality: More layers allow the model to learn more complex and abstract features. Deeper models are generally more powerful, but also more prone to overfitting and can be harder to train (though residual connections help mitigate this).
 
-- **num_epochs**
+- **m_epochs**
 
   - Values: [1 : ****]
   - What it is: The number of times the training process will iterate over the entire training dataset.
@@ -445,7 +445,7 @@ These are the special learning blocks that help little baby grow smart and curio
 
 | dataset | description |
 |-----|-----|
-| shakespeare | works into a single document of 32777 paragraphs, 12519 sentences, 202651 words, 1075394 characters / tokens for learning and 500 characters / tokens for inference |
+| shakespeare | works into a single document of 32777 paragraphs, 35558 sentences, 202651 words, 1075394 characters / tokens for learning and 500 characters / tokens for inference |
 | sophocles | works into a single document of 8879 paragraphs, 2597 sentences, 1135 words, 283822 characters / tokens for learning and 500 characters / tokens for inference |
 
 

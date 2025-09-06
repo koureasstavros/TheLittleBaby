@@ -6,7 +6,7 @@
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import sigmoid
+from src.functions.process import sigmoid, sigmoid_prime
 
 class LIN(Module):
     """
@@ -82,15 +82,15 @@ class LIN(Module):
         """
 
         # 1. Main projection
-        self._cache_c_lin = self.c_proj.forward(x)
+        self.c_proj_out = self.c_proj.forward(x)
 
         # 2. Optional gating
         if self.use_gate:
-            self._cache_g_lin = self.g_proj.forward(x)
-            gate = sigmoid(self.mp, self._cache_g_lin)
-            out = self._cache_c_lin * gate
+            self.g_proj_out = self.g_proj.forward(x)
+            self.g_sig = sigmoid(self.mp, self.g_proj_out)
+            out = self.c_proj_out * self.g_sig
         else:
-            out = self._cache_c_lin
+            out = self.c_proj_out
 
         # 3. Apply dropout
         out = self.dropout.forward(out)
@@ -107,14 +107,15 @@ class LIN(Module):
         # 1. Backward through dropout
         grad_out, _ = self.dropout.backward(grad_output)
 
-        # 2. Optional gating
+        # 2. Backward through optional gating
         if self.use_gate:
-            g_sig = sigmoid(self.mp, self._cache_g_lin)
-            grad_c_out = grad_out * g_sig
-            grad_g_sig = grad_out * self._cache_c_lin
-            grad_g_lin = grad_g_sig * g_sig * (1 - g_sig)
-            grad_x_c, c_proj_grads = self.c_proj.backward(grad_c_out)
-            grad_x_g, g_proj_grads = self.g_proj.backward(grad_g_lin)
+            grad_c_proj = grad_out * self.g_sig
+            grad_g_sig = grad_out * self.c_proj_out
+            g_proj = grad_g_sig * sigmoid_prime(self.mp, self.g_sig)
+
+            grad_x_c, c_proj_grads = self.c_proj.backward(grad_c_proj)
+            grad_x_g, g_proj_grads = self.g_proj.backward(g_proj)
+
             grad_x = grad_x_c + grad_x_g
             param_grads = c_proj_grads + g_proj_grads
         else:
@@ -134,7 +135,7 @@ class LIN(Module):
         if self.use_gate:
             self.g_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lin_c_weight'] = self.c_proj.weight
         weights_dict[f'block_{i}_lin_c_bias'] = self.c_proj.bias
         if self.use_gate:

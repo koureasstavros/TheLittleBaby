@@ -159,44 +159,46 @@ class AFT(Module):
                 y_t = s_t  # gate=1
                 y_list.append(y_t[:, None, :])
 
-            # 1.2. Concatenate results and apply output projection
+            # Concatenate results and apply output projection
             y = self.mp.concatenate(y_list, axis=1)      # (B,T_q,D)
 
-            # 1.3. Apply output projection and residual dropout
+            # Apply output projection and residual dropout
             out = self.c_proj.forward(y)
 
-            # 1.4. Apply residual dropout
+            # Apply residual dropout
             out = self.resid_dropout.forward(out)
 
-            # 1.5. Update KV cache
+            # Update KV cache
             self.kv_cache = {'S': S, 'SV': SV, 'E_fifo': E_fifo, 'EV_fifo': EV_fifo}
             return out
 
         # 3. Compute E = exp(K) and prefix sums S
         eps = 1e-9
-        E = self.forward_exp_clip(k_lin)            # (B,T,D)
-        S = self.mp.forward_cumsum(E)        # (B,T,D)
+        E = self.forward_exp_clip(k_lin)     # (B,T,D)
 
-        # 4. Compute E * V
+        # 4. Compute cumulative sums
+        S = self.forward_cumsum(E)           # (B,T,D)
+
+        # 5. Compute E * V
         EV = E * v_lin                       # (B,T,D)
-        SV = self.forward_cumsum(EV)      # (B,T,D)
+        SV = self.forward_cumsum(EV)         # (B,T,D)
 
-        # 5. Compute prefix sums for V
+        # 6. Compute prefix sums for V
         s = SV / (S + eps)                   # (B,T,D)
 
-        # 6. Apply dropout
+        # 7. Dropout on s
         s_d = self.attn_dropout.forward(s)
 
-        # 7. Residual connection
+        # 8. Residual connection
         c_in = s_d                           # gate=1
 
-        # 8. Final linear projection
+        # 9. Final linear projection
         out = self.c_proj.forward(c_in)
 
-        # 9. Apply residual dropout
+        # 10. Residual dropout
         out = self.resid_dropout.forward(out)
 
-        # 10. Cache intermediate values for backward pass
+        # 11. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, k_lin, v_lin, E, S, EV, SV, s, s_d)
         
@@ -212,37 +214,39 @@ class AFT(Module):
         (x, k_lin, v_lin, E, S, EV, SV, s, s_d) = self._cache
         B, T, D = x.shape
 
-        # 2. Residual dropout backward
+        # 2. Backward through residual dropout
         grad_c_out, _ = self.resid_dropout.backward(grad_output)
 
-        # 3. c_proj backward
+        # 3. Backward through final linear projection
         grad_c_in, c_grads = self.c_proj.backward(grad_c_out)  # (B,T,D)
 
-        # 4. Since c_in = s_d (gate=1), grad_s_d = grad_c_in
+        # 4. Backward through c_in = s_d (gate=1), grad_s_d = grad_c_in
         grad_s_d = grad_c_in
 
-        # 5. Dropout backward on s
+        # 5. Backward through dropout on s
         grad_s, _ = self.attn_dropout.backward(grad_s_d)
 
-        # 6. s = SV / (S + eps)
+        # 6. Backward through s = SV / (S + eps)
         eps = 1e-9
         S_eps = S + eps
+
+        # 7. Backward through compute gradients
         grad_SV = grad_s / S_eps
         grad_S = -grad_s * (s / S_eps)
 
-        # 7. Backprop through cumulative sums (reverse cumsum)
+        # 8. Backward through cumulative sums (reverse cumsum)
         G_SV = self.backward_cumsum(grad_SV)   # grads wrt EV
         grad_V = E * G_SV
         grad_E_fromSV = G_SV * v_lin
 
-        # 8. Backprop through cumulative sums (reverse cumsum)
+        # 9. Backward through cumulative sums (reverse cumsum)
         G_S = self.backward_cumsum(grad_S)     # grads wrt E
         grad_E = grad_E_fromSV + G_S
 
-        # 9. E = exp(k_lin) -> grad_k_lin = grad_E * E
+        # 10. Backward through E = exp(k_lin) -> grad_k_lin = grad_E * E
         grad_k_lin = self.backward_exp_clip(grad_E, k_lin)
 
-        # 10. Back through k_proj, v_proj (no q_proj path)
+        # 11. Backward through k_proj, v_proj (no q_proj path)
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)
         grad_x_v, v_grads = self.v_proj.backward(grad_V)
 
@@ -275,7 +279,7 @@ class AFT(Module):
         self.v_proj.synchronize()
         self.c_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_aft_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_aft_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_aft_v_weight'] = self.v_proj.weight

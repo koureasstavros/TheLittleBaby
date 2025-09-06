@@ -1,6 +1,11 @@
 ## 📦 Changelog
 In this changelog, you can find a concise summary of all the updates made to the software—ranging from new features and performance improvements to bug fixes. It serves as a transparent record that helps users track the evolution of the software across different versions. Whether you're looking for what's new, what's changed, or what’s been resolved, the changelog is your go-to snapshot of progress.
 
+- Version v0.1.7
+  - Fixed config files information cpu / gpu
+  - Fixed attentions and networks comments order and description
+  - Fixed attentions and networks prime functions for backward steps
+
 - Version v0.1.6
   - Fixed blank charts
 

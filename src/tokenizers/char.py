@@ -48,20 +48,20 @@ class CharTokenizer:
         """ Convert list of token IDs to string. """
         return ''.join([self.itos[i] for i in token_ids])
     
-    def to_dict(self):
-        """ Export tokenizer state as dictionary for JSON serialization. """
-        return {
-            'vocab': self.vocab,
-            'vocab_size': self.vocab_size
-        }
-    
     def from_dict(self, tokenizer_dict):
         """ Load tokenizer from dictionary. """
         self.vocab=tokenizer_dict['vocab']
         self.vocab_size=len(self.vocab)
         self.itos={int(k): v for k, v in enumerate(self.vocab)} # Convert keys back to integers
         self.stoi={str(v): k for k, v in enumerate(self.vocab)} # Convert keys back to strings
-
+    
+    def towa_dict(self):
+        """ Export tokenizer state as dictionary for JSON serialization. """
+        return {
+            'vocab': self.vocab,
+            'vocab_size': self.vocab_size
+        }
+    
     def tokenize(self, text):
         """ Tokenize input text and return data. """        
         

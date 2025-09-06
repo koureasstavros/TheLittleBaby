@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, onehot_argmax
+from src.functions.process import softmax, softmax_prime, onehot_argmax
 
 class SWH(Module):
     """
@@ -199,13 +199,13 @@ class SWH(Module):
         gate_probs_soft = softmax(self.mp, gate_logits, axis=-1)        # (B,T_q,H)
         gate_probs_hard, gate_idx = onehot_argmax(self.mp, gate_logits, self.n_heads)   # (B,T_q,H)
 
-        # 10. Straight-through gating
+        # 10. Mixture gating
         # Rearrange heads for mixture: (B,H,T_q,d_k) -> (B,T_q,H,d_k)
         o_perm = o.transpose(0, 2, 1, 3)
         # Weighted sum across heads (hard selection)
         y = self.mp.sum(gate_probs_hard[..., None] * o_perm, axis=2)  # (B,T_q,d_k)
 
-        # 11. Project to n_emb
+        # 11. Final output projection
         m_proj_out = self.m_proj.forward(y)                           # (B,T_q,n_emb)
 
         # 12. Apply residual dropout
@@ -230,38 +230,38 @@ class SWH(Module):
          scores, attn_weights, attn_weights_d, o,
          gate_logits, gate_probs_soft, gate_probs_hard, o_perm) = self._cache
 
-        # 2. Residual dropout
+        # 2. Backward through residual dropout
         grad_m_proj_in, _ = self.resid_dropout.backward(grad_output)
 
-        # 3. m_proj
+        # 3. Backward through final output projection
         grad_y, m_proj_grads = self.m_proj.backward(grad_m_proj_in)  # (B,T_q,d_k)
 
-        # 4. Mixture y = sum_h p_hard * o_h
+        # 4. Backward through mixture gating y = sum_h p_hard * o_h
         # grad wrt o_perm uses hard probs (only selected head gets grad)
         grad_o_perm = grad_y[:, :, None, :] * gate_probs_hard[..., None]  # (B,T_q,H,d_k)
         # grad wrt probs: dL/dp_h = dot(grad_y, o_h)
         grad_g_proj_probs = self.mp.sum(grad_y[:, :, None, :] * o_perm, axis=-1)  # (B,T_q,H)
 
-        # 5. Softmax backward on gate logits (straight-through: use soft probs in Jacobian)
+        # 5. Backward through softmax on gate logits (straight-through: use soft probs in Jacobian)
         sum_gp = self.mp.sum(grad_g_proj_probs * gate_probs_soft, axis=-1, keepdims=True)
         grad_g_proj_logits = gate_probs_soft * (grad_g_proj_probs - sum_gp)  # (B,T_q,H)
 
-        # 6. Backward g_proj
+        # 6. Backward through g_proj
         grad_x_g_proj, g_proj_grads = self.g_proj.backward(grad_g_proj_logits)
 
-        # 7. Backprop to o (undo transpose)
+        # 7. Backward through attention scores
         grad_o = grad_o_perm.transpose(0, 2, 1, 3)  # (B,H,T_q,d_k)
-
-        # 8. Attention matmul
         grad_attn_weights_d = self.mp.matmul(grad_o, V_new.transpose(0, 1, 3, 2))   # (B,H,T_q,S)
         grad_V_new = self.mp.matmul(attn_weights_d.transpose(0, 1, 3, 2), grad_o)   # (B,H,S,d_k)
 
-        # 9. Dropout on attn weights
+        # 8. Backward through dropout on attn weights
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_d)
 
-        # 10. Softmax backward over scores
-        sum_aw = self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True)
-        grad_scores = attn_weights * (grad_attn_weights - sum_aw)
+        # 9. Backward through softmax backward over scores
+        grad_masked_scores = softmax_prime(self.mp, grad_attn_weights, attn_weights)
+        
+        # 10. Backward through causal_mask (causal_mask is constant, so its gradient is 0)
+        grad_scores = grad_masked_scores
 
         # 11. scores = (Q K^T)/sqrt(d_k)
         scale = 1.0 / mt.sqrt(self.d_k)
@@ -305,7 +305,7 @@ class SWH(Module):
         self.g_proj.synchronize()
         self.m_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_swh_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_swh_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_swh_v_weight'] = self.v_proj.weight

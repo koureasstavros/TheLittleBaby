@@ -431,7 +431,7 @@ class GPT(Module):
             # Network
             block.net.from_dict(weights_dict, i)
 
-    def params_to_dict(self):     
+    def params_towa_dict(self):     
         """ Model parameters to a JSON file. """
 
         # Extract all weight arrays from the model
@@ -458,10 +458,10 @@ class GPT(Module):
             weights_dict[f'block_{i}_ln2_beta'] = block.ln_2.beta
             
             # Attention
-            block.att.to_dict(weights_dict, i)
+            block.att.towa_dict(weights_dict, i)
 
             # Network
-            block.net.to_dict(weights_dict, i)
+            block.net.towa_dict(weights_dict, i)
         
         # Convert numpy arrays to lists for JSON serialization
         json_weights_dict = {}
@@ -478,11 +478,11 @@ class GPT(Module):
         """ Tokenizer to a JSON file. """
         self.tokenizer_dict = self.tokenizer.from_dict(json_tokenizer_dict)
 
-    def tokenizer_to_dict(self):     
+    def tokenizer_towa_dict(self):     
         """ Tokenizer to a JSON file. """
         return self.tokenizer_dict
     
-    def config_to_dict(self):     
+    def config_towa_dict(self):     
         """ Config to a JSON file. """
         self.config_dict["runtime"] = {
             "model_params": self.count_parameters(),
@@ -490,11 +490,11 @@ class GPT(Module):
             }
         return self.config_dict
 
-    def report_to_dict(self):     
+    def report_towa_dict(self):     
         """ Report to a JSON file. """
         return self.report_dict
     
-    def completion_to_dict(self):     
+    def completion_towa_dict(self):     
         """ Completion to a JSON file. """
         return self.completion_dict
     
@@ -522,7 +522,7 @@ class GPT(Module):
         train_data, val_data = self.tokenizer.tokenize(input_text)        
 
         # Create the tokenizer object
-        tokenizer_dict = self.tokenizer.to_dict()
+        tokenizer_dict = self.tokenizer.towa_dict()
 
         # Save the tokenizer to JSON
         self.tokenizer_dict = tokenizer_dict

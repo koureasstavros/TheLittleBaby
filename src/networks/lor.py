@@ -105,20 +105,20 @@ class LOR(Module):
         # 1. Backward through dropout
         grad_combined, _ = self.dropout.backward(grad_output)
 
-        # 2. Split gradient for LoRA path (base_proj is frozen, so no grads)
+        # 2. Backward through split gradient (base_proj is frozen, so no grads)
         grad_lora = grad_combined
 
-        # 3. Backward through LoRA
+        # 3. Backward through LoRA adaptation
         grad_A_out, c_proj_up_grads = self.c_proj_up.backward(grad_lora * self.scaling)
         grad_x_lora, c_proj_dn_grads = self.c_proj_dn.backward(grad_A_out)
 
-        # 4. Gradient through base_proj (ignored for params, but needed for grad_x)
+        # 4. Backward through base_proj (ignored for params, but needed for grad_x)
         grad_x_base, _ = self.c_proj.backward(grad_combined)
 
-        # Total grad_x
+        # Assemble grad_x
         grad_x = grad_x_base + grad_x_lora
 
-        # Only LoRA params are trainable
+        # Assemble gradients
         param_grads = c_proj_dn_grads + c_proj_up_grads
 
         return grad_x, param_grads
@@ -135,7 +135,7 @@ class LOR(Module):
         self.c_proj_dn.synchronize()
         self.c_proj_up.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_lor_c_proj_weight'] = self.c_proj.weight
         weights_dict[f'block_{i}_lor_c_proj_bias'] = self.c_proj.bias
         weights_dict[f'block_{i}_lor_c_proj_dn_weight'] = self.c_proj_dn.weight

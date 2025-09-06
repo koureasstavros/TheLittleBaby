@@ -6,7 +6,7 @@
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, gelu, gelu_prime
+from src.functions.process import softmax, softmax_prime, gelu, gelu_prime
 
 class MOE(Module):
     """
@@ -126,10 +126,10 @@ class MOE(Module):
         B, T, D = x.shape
         E = self.n_experts
 
-        # 2. Dropout backward
+        # 2. Backward through dropout
         grad_y, _ = self.dropout.backward(grad_output)  # (B,T,D)
 
-        # 3. Grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
+        # 3. Backward through grad wrt expert outputs (before weighting): y = sum_e p_e * o_e
         # For each expert e: contribution scaled by p_e
         grad_expert_out = []  # list of (B,T,D)
         for e in range(E):
@@ -142,10 +142,8 @@ class MOE(Module):
             gate_upstream.append(self.mp.sum(grad_y * expert_out[e], axis=-1))  # (B,T)
         gate_upstream = self.mp.stack(gate_upstream, axis=-1)  # (B,T,E)
 
-        # 5. Softmax backward: p = softmax(z)
-        # dL/dz = p * (dL/dp - sum_e dL/dp_e * p_e)
-        sum_term = self.mp.sum(gate_upstream * gate_probs, axis=-1, keepdims=True)
-        grad_g_proj_logits = gate_probs * (gate_upstream - sum_term)  # (B,T,E)
+        # 5. Backward through softmax p = softmax(z)
+        grad_g_proj_logits = softmax_prime(self.mp, gate_upstream, gate_probs)
 
         # 6. Backward gate linear
         grad_x_g_proj, gate_param_grads = self.g_proj.backward(grad_g_proj_logits)  # grad_x_g_proj: (B,T,D)
@@ -162,8 +160,8 @@ class MOE(Module):
 
             # Up projection backward
             grad_x_e, up_grads = self.c_proj_up[e].backward(grad_fc)
-
             grad_x += grad_x_e
+            
             # Maintain ordering: up, down per expert
             expert_param_grads_flat.extend(up_grads)
             expert_param_grads_flat.extend(down_grads)
@@ -189,7 +187,7 @@ class MOE(Module):
             self.c_proj_up[expert_idx].synchronize()
             self.c_proj_dn[expert_idx].synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_moe_g_weight'] = self.g_proj.weight        
         weights_dict[f'block_{i}_moe_n_expansion'] = self.n_expansion
         weights_dict[f'block_{i}_moe_n_experts'] = self.n_experts

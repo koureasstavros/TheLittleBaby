@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax
+from src.functions.process import softmax, softmax_prime
 
 class MHA(Module):
     """
@@ -211,13 +211,13 @@ class MHA(Module):
         # 1. Unpack cached values
         (x, Q_orig, K_orig, V_orig, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined) = self._cache
 
-        # 2. Backward through resid_dropout
+        # 2. Backward through residual dropout
         grad_out_dropped, _ = self.resid_dropout.backward(grad_output) # Dropout has no params
 
-        # 3. Backward through c_proj (output linear layer)
+        # 3. Backward through final linear projection
         grad_o_combined, c_proj_grads = self.c_proj.backward(grad_out_dropped)
 
-        # 4. Undo reshape/transpose for o_combined to get grad_o
+        # 4. Backward through undo reshape/transpose for o_combined to get grad_o
         # grad_o_combined: (B, T, head_size)
         # grad_o: (B, n_heads, T, d_k)
         B, T, H = grad_o_combined.shape
@@ -233,9 +233,9 @@ class MHA(Module):
 
         # 7. Backward through softmax (attn_weights = softmax(masked_scores))
         # dL/dx = y * (dL/dy - sum(dL/dy * y)) where y = softmax(x)
-        grad_masked_scores = grad_attn_weights * attn_weights - self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True) * attn_weights
-
-        # 8. Backward through scores + causal_mask (causal_mask is constant, so its gradient is 0)
+        grad_masked_scores = softmax_prime(self.mp, grad_attn_weights, attn_weights)
+        
+        # 8. Backward through causal_mask (causal_mask is constant, so its gradient is 0)
         grad_scores = grad_masked_scores
 
         # 9. Backward through scaled dot-product: scores = (Q @ K.T) / sqrt(d_k)
@@ -279,7 +279,7 @@ class MHA(Module):
         self.v_proj.synchronize()
         self.c_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_mha_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_mha_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_mha_v_weight'] = self.v_proj.weight

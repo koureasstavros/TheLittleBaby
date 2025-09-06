@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax
+from src.functions.process import softmax, softmax_prime
 
 class GQA(Module):
     """
@@ -165,7 +165,7 @@ class GQA(Module):
             if self.kv_cache is not None:
                 K_cached, V_cached = self.kv_cache
                 K = self.mp.concatenate([K_cached, K_new], axis=2)  # concat along sequence
-                V = self.mp.concatenate([V_cached, V_new], axis=2)
+                V = self.mp.concatenate([V_cached, V_new], axis=2)  # concat along sequence
             else:
                 K = K_new
                 V = V_new
@@ -200,22 +200,24 @@ class GQA(Module):
         masked_scores = scores + mask
 
         # 6. Softmax over attention scores
-        attn_weights = softmax(self.mp, masked_scores, axis=-1)                      # (B,Hq,T_q,actual_seq_len)
+        attn_weights = softmax(self.mp, masked_scores, axis=-1)    
+
+        # 7. Apply dropout
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
-        # 7. Weighted sum: Attn @ V
+        # 8. Calculate weighted sum: Attn @ V
         o = self.mp.matmul(attn_weights_dropped, V_rep)                                # (B,Hq,T_q,d_k)
 
-        # 8. Recombine heads
+        # 9. Recombine heads
         o_combined = o.transpose(0, 2, 1, 3).reshape(B, T_q, self.head_size)  # (B,T_q,Hq*d_k)
         
-        # 9. Output projection
+        # 10. Final linear projection
         out = self.c_proj.forward(o_combined)
 
-        # 10. Residual dropout
+        # 11. Residual dropout
         out = self.resid_dropout.forward(out)
 
-        # 11. Cache intermediate values for backward pass
+        # 12. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, self.group_size,
                            scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
@@ -232,20 +234,18 @@ class GQA(Module):
         (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, group_size,
          scores, masked_scores, attn_weights, attn_weights_d, o, o_combined) = self._cache
 
-        # 2. resid dropout
+        # 2. Backward through residual dropout
         grad_c_proj_in, _ = self.resid_dropout.backward(grad_output)
 
-        # 3. c_proj backward
+        # 3. Backward through final linear projection
         grad_o_combined, c_proj_grads = self.c_proj.backward(grad_c_proj_in)
 
-        # 4. Uncombine heads
+        # 4. Backward through uncombine heads
         B, T_q, _ = grad_o_combined.shape
         grad_o = grad_o_combined.reshape(B, T_q, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,Hq,T_q,d_k)
 
-        # 5. Recreate repeated V for backward
+        # 5. Backward through recreate repeated V for backward
         V_rep = self.mp.repeat(V_new, repeats=group_size, axis=1)  # (B,Hq,*,d_k)
-
-        # 6. o = attn_weights_d @ V_rep
         grad_attn_weights_d = self.mp.matmul(grad_o, V_rep.transpose(0, 1, 3, 2))      # (B,Hq,T_q,actual_seq_len)
         grad_V_rep = self.mp.matmul(attn_weights_d.transpose(0, 1, 3, 2), grad_o)      # (B,Hq,actual_seq_len,d_k)
 
@@ -255,29 +255,31 @@ class GQA(Module):
         grad_V_rep_grouped = grad_V_rep.reshape(B, Hkv, group_size, grad_V_rep.shape[2], self.d_k).sum(axis=2)
         grad_V_new = grad_V_rep_grouped  # (B,Hkv,*,d_k)
 
-        # 7. Dropout on attn weights
+        # 6. Backward through dropout on attn weights
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_d)
 
-        # 8. softmax backward
-        sum_term = self.mp.sum(grad_attn_weights * attn_weights, axis=-1, keepdims=True)
-        grad_scores = attn_weights * (grad_attn_weights - sum_term)
+        # 7. Backward through softmax
+        grad_masked_scores = softmax_prime(self.mp, grad_attn_weights, attn_weights)
 
-        # 9. scores = (Q @ K_rep^T) / sqrt(d_k)
+        # 8. Backward through causal_mask (causal_mask is constant, so its gradient is 0)
+        grad_scores = grad_masked_scores
+
+        # 9. Backward through gradients of attention
         K_rep = self.mp.repeat(K_new, repeats=group_size, axis=1)
         scale = 1.0 / mt.sqrt(self.d_k)
         grad_Q = self.mp.matmul(grad_scores, K_rep) * scale                              # (B,Hq,T_q,d_k)
-        grad_K_rep = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) * scale       # (B,Hq,*,d_k)
+        grad_K_rep = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) * scale        # (B,Hq,*,d_k)
 
-        # Collapse repeats back to Hkv for K
+        # 10. Backward through collapse repeats back to Hkv for K
         grad_K_rep_grouped = grad_K_rep.reshape(B, Hkv, group_size, grad_K_rep.shape[2], self.d_k).sum(axis=2)
         grad_K_new = grad_K_rep_grouped  # (B,Hkv,*,d_k)
 
-        # 10. Merge head grads back to linear input shapes
+        # 11. Backward through merge head grads back to linear input shapes
         grad_Q_lin = self.backward_unsplit_q(grad_Q, Q_lin.shape)
         grad_K_lin = self.backward_unsplit_kv(grad_K_new, K_lin.shape)
         grad_V_lin = self.backward_unsplit_kv(grad_V_new, V_lin.shape)
 
-        # 11. Backward q,k,v projections
+        # 12. Backward through q,k,v projections
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_lin)
         grad_x_k, k_proj_grads = self.k_proj.backward(grad_K_lin)
         grad_x_v, v_proj_grads = self.v_proj.backward(grad_V_lin)
@@ -306,7 +308,7 @@ class GQA(Module):
         self.v_proj.synchronize()
         self.c_proj.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_gqa_q_weight'] = self.q_proj.weight
         weights_dict[f'block_{i}_gqa_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_gqa_v_weight'] = self.v_proj.weight

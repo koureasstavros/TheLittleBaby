@@ -78,6 +78,7 @@ class GGL(Module):
 
         # 2. Process each group
         outputs = []
+        gates = []          # store sigmoid outputs
         gate_pre_acts = []  # store raw gate outputs before sigmoid
         for i in range(self.n_groups):
             h = self.linears[i].forward(groups[i])
@@ -85,6 +86,7 @@ class GGL(Module):
             gate = sigmoid(self.mp, gate_raw)
             outputs.append(h * gate)
             gate_pre_acts.append(gate_raw)
+            gates.append(gate)
 
         # 3. Merge groups and apply dropout
         out = self.mp.concatenate(outputs, axis=2)
@@ -94,7 +96,7 @@ class GGL(Module):
 
         # 5. Cache intermediate results if needed
         if self.setting:
-            self._cache = (x, groups, outputs, gate_pre_acts)
+            self._cache = (x, groups, outputs, gate_pre_acts, gates)
 
         return out
 
@@ -104,27 +106,27 @@ class GGL(Module):
         """
 
         # 1. Unpack cached values
-        _, _, _, gate_pre_acts = self._cache
+        _, _, _, gate_pre_acts, gates = self._cache
 
         # 2. Backward through dropout
         grad_out, _ = self.dropout.backward(grad_output)
 
-        # 3. Split gradient into groups
+        # 3. Backward through split gradient into groups
         grad_groups = self.mp.split(grad_out, self.n_groups, axis=2)
-        grad_x_parts = []
-        param_grads = []
 
         # 4. Backward through each group
+        grad_x_parts = []
+        param_grads = []
         for i in range(self.n_groups):
             grad_h = grad_groups[i]
             grad_gate = grad_groups[i]
-            grad_h_in = grad_h * sigmoid(self.mp, gate_pre_acts[i])
-            grad_gate_in = grad_gate * sigmoid_prime(self.mp, gate_pre_acts[i])
+            grad_h_in = grad_h * gates[i]
+            grad_gate_in = grad_gate * sigmoid_prime(self.mp, gates[i])
             grad_x_l, l_grads = self.linears[i].backward(grad_h_in)
             grad_x_g, g_grads = self.gates[i].backward(grad_gate_in)
             grad_x_parts.append(grad_x_l + grad_x_g)
             param_grads += l_grads + g_grads
-
+            
         # 5. Merge gradients from all groups
         grad_x = self.mp.concatenate(grad_x_parts, axis=2)
 
@@ -138,7 +140,7 @@ class GGL(Module):
             self.linears[group_idx].synchronize()
             self.gates[group_idx].synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         for group_idx in range(self.n_groups):
             weights_dict[f'block_{i}_ggl_linear_{group_idx}_weight'] = self.linears[group_idx].weight
             weights_dict[f'block_{i}_ggl_gate_{group_idx}_weight'] = self.gates[group_idx].weight

@@ -66,13 +66,6 @@ class SWI(Module):
         self.c_proj_gt.set(mode)
         self.c_proj_dn.set(mode)
 
-    def swish(self, x):
-        return x * sigmoid(self.mp, x)
-
-    def swish_grad(self, x):
-        sig = sigmoid(self.mp, x)
-        return sig + x * sigmoid_prime(self.mp, x)
-
     def forward(self, x):
         """
         Forward pass for the SwiGLU layer.
@@ -83,12 +76,13 @@ class SWI(Module):
         self.h2 = self.c_proj_gt.forward(x)
 
         # 2. Gating Swish Mechanism
-        self.gate = self.swish(self.h2)
+        self.sig_h2 = sigmoid(self.mp, self.h2)
+        self.gate = self.h2 * self.sig_h2
 
         # 3. Gated Hidden State
         self.h = self.h1 * self.gate
 
-        # 4. Final Output
+        # 4. Final Projection
         self.out = self.c_proj_dn.forward(self.h)
 
         return self.out
@@ -98,17 +92,17 @@ class SWI(Module):
         Backward pass for the SwiGLU layer.
         """
 
-        # 1. Backprop through c_proj_dn
+        # 1. Backward through final projection
         grad_h, c_proj_dn_grads = self.c_proj_dn.backward(grad_output)  # grad_h: (batch, hidden_features)
 
-        # 2. Backprop through gated hidden state
+        # 2. Backward through gated hidden state
         grad_h1 = grad_h * self.gate
         grad_gate = grad_h * self.h1
 
-        # 3. Backprop through Swish Mechanism
-        grad_h2 = grad_gate * self.swish_grad(self.h2)
+        # 3. Backward through Swish Mechanism
+        grad_h2 = grad_gate * (self.sig_h2 + self.h2 * sigmoid_prime(self.mp, self.sig_h2))
 
-        # 4. Backprop through c_proj_up and c_proj_gt
+        # 4. Backward through projections
         grad_x1, c_proj_up_grads = self.c_proj_up.backward(grad_h1)
         grad_x2, c_proj_gt_grads = self.c_proj_gt.backward(grad_h2)
 
@@ -132,7 +126,7 @@ class SWI(Module):
         self.c_proj_gt.synchronize()
         self.c_proj_dn.synchronize()
 
-    def to_dict(self, weights_dict, i):
+    def towa_dict(self, weights_dict, i):
         weights_dict[f'block_{i}_swi_c_proj_up_weight'] = self.c_proj_up.weight
         weights_dict[f'block_{i}_swi_c_proj_up_bias'] = self.c_proj_up.bias
         weights_dict[f'block_{i}_swi_c_proj_gt_weight'] = self.c_proj_gt.weight
