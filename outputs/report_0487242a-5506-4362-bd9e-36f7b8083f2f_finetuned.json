@@ -1,13 +1,13 @@
 {
     "n_epochs": 1,
-    "avg_train_time_per_batch": 0.7251292536191012,
+    "avg_train_time_per_batch": 0.6848334586701762,
     "train_batches_per_epoch": 15957,
-    "avg_val_time_per_batch": 0.05254614949037377,
+    "avg_val_time_per_batch": 0.05254614949037372,
     "val_batches_per_epoch": 1766,
     "average_train_loss_per_epoch": 0.46288204780987985,
     "average_val_loss_per_epoch": 2.627165583594878,
-    "average_time_per_epoch": 11965.898058652878,
-    "total_time": 11965.898058652878,
+    "average_time_per_epoch": 11322.898058652878,
+    "total_time": 11322.898058652878,
     "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/15957 | train_loss = 0.6261 | execution_time = 0.8865",
@@ -6840,7 +6840,7 @@
         "Epoch 1/1 | Batch 6828/15957 | train_loss = 0.4835 | execution_time = 0.6846",
         "Epoch 1/1 | Batch 6829/15957 | train_loss = 0.4561 | execution_time = 0.6661",
         "Epoch 1/1 | Batch 6830/15957 | train_loss = 0.4345 | execution_time = 0.6887",
-        "Epoch 1/1 | Batch 6831/15957 | train_loss = 0.4739 | execution_time = 643.0183",
+        "Epoch 1/1 | Batch 6831/15957 | train_loss = 0.4739 | execution_time = 0.0183",
         "Epoch 1/1 | Batch 6832/15957 | train_loss = 0.4357 | execution_time = 1.0619",
         "Epoch 1/1 | Batch 6833/15957 | train_loss = 0.3901 | execution_time = 0.7177",
         "Epoch 1/1 | Batch 6834/15957 | train_loss = 0.4879 | execution_time = 0.6985",
@@ -17735,6 +17735,6 @@
         "Epoch 1/1 | Batch 1766/1766 | val_loss = 2.7481 | execution_time = 0.0501"
     ],
     "epoch_logs": [
-        "Epoch 1/1 | train_loss = 0.4629 | val_loss = 2.6272 | execution_time = 11965.8981"
+        "Epoch 1/1 | train_loss = 0.4629 | val_loss = 2.6272 | execution_time = 11322.8981"
     ]
 }

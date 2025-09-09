@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.8
+version: v0.1.9
 ---
 
 # 👶 The Little Baby
@@ -487,8 +487,8 @@ These are the little notes that show how baby is learning and growing every day!
 |-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----------|-----------|-----------|-----------|-----------|-----------|-----------|---------------|
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.28s | 5653s | 5653s | 9s | 43.9/100 | 28,924,010 | 833635 | f2313e8a-35fb-4d12-befa-9410d7c5439d |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.28s | 5617s | 5617s | 5s | 15.9/100 | 28,835,367 | 833635 | f2313e8a-35fb-4d12-befa-9410d7c5439d_finetuned |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.70s | 11578s | 11578s | 10s | 31.7/100 | 56,362,462 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.72s | 11965s | 11965s | 29s | 29.8/100 | 56,531,116 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.68s | 11368s | 11368s | 10s | 31.7/100 | 56,362,462 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.68s | 11322s | 11322s | 29s | 29.8/100 | 56,531,116 | 1625187 | 0487242a-5506-4362-bd9e-36f7b8083f2f_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 35976s | 35976s | 22s | 22.1/100 | 112,003,504 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5 |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | mlp | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 2.22s | 36733s | 36733s | 19s | 40.5/100 | 111,977,971 | 3208291 | c1767e64-390e-49a8-9140-d49b4a87aec5_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | moh | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.75s | 12442s | 12442s | 9s | 31.4/100 | 81,998,967 | 4470371 | a8009cc2-a12a-4ceb-a943-3856f5e19a33 |
@@ -517,10 +517,13 @@ These are the little notes that show how baby is learning and growing every day!
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | lda | lin | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 0.44s | 7250s | 7250s | 18s | 5.0/100 | 46,811,224 | 1389667 | 84a9d1c0-ba94-4244-b64e-c7fbaf101671_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.23s | 3948s | 3948s | 16s | 19.1/100 | 11,820,689 | 339555 | 2ce1c123-0db0-44bc-b17f-d9cf22a05aab |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.26s | 5282s | 5282s | 7s | 12.5/100 | 11,779,646 | 339555 | 2ce1c123-0db0-44bc-b17f-d9cf22a05aab_finetuned |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.63s | 10414s | 10414s | 16s | 5.0/100 | 22,177,690 | 637027 | 57d57b9b-ec1c-4f19-acc0-d14d20de8b09 |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.53s | 8814s | 8814s | 16s | 5.0/100 | 22,177,690 | 637027 | 57d57b9b-ec1c-4f19-acc0-d14d20de8b09 |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 8 | 1 | 16 | 1e-3 | 0.45s | 7578s | 7578s | 20s | 23.5/100 | 22,177,690 | 637027 | 57d57b9b-ec1c-4f19-acc0-d14d20de8b09_finetuned |
 | v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.03s | 18944s | 18944s | 30s | 16.4/100 | 42,913,724 | 1231971 | f67f0ad3-d80a-468a-9fbe-29b9e6f1d50e |
-| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.59s | 27362s | 27362s | 62s | 20.2/100 | 42,765,026 | 1231971 | f67f0ad3-d80a-468a-9fbe-29b9e6f1d50e_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | rfa | ggl | 128 | 128 | 0.1 | 128 | 16 | 16 | 1 | 16 | 1e-3 | 1.47s | 25404s | 25404s | 62s | 20.2/100 | 42,765,026 | 1231971 | f67f0ad3-d80a-468a-9fbe-29b9e6f1d50e_finetuned |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.77s | 12765s | 12765s | 12s | 72.8/100 | 83,824,733 | 4523619 | 73a07294-b706-468d-a834-7504cdbf5d7b |
+| v0.1.0 | gpu | NVidia RTX A500 Laptop GPU | sophocles | char | pre | mha | moe | 128 | 128 | 0.1 | 128 | 16 | 4 | 1 | 16 | 1e-3 | 0.77s | 12854s | 12854s | 22s | 84.8/100 | 83,640,737 | 4523619 | 73a07294-b706-468d-a834-7504cdbf5d7b_finetuned |
+
 
 *Keep in mind that quality should never be assumed without scrutiny, as its evaluation by a larger language model depends on specific criteria. Keep in mind, these models may not consistently produce the same assessment across different runs or contexts.
 
