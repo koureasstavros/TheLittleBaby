@@ -34,6 +34,13 @@ class LIN(Module):
 
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)
+    
+    def set(self, mode=True):
+        super().set(mode)
+        self.c_proj.set(mode)
+        if self.g_proj is not None:
+            self.g_proj.set(mode)
+        self.dropout.set(mode)
 
     def parameters(self):
         if self.use_gate:
@@ -67,13 +74,6 @@ class LIN(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-    
-    def set(self, mode=True):
-        super().set(mode)
-        self.c_proj.set(mode)
-        if self.g_proj is not None:
-            self.g_proj.set(mode)
-        self.dropout.set(mode)
 
     def forward(self, x):
         """

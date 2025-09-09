@@ -77,6 +77,50 @@ def cosine_similarity_prime(mp, grad_out, a, b, eps=1e-8):
 
     return grad_a, grad_b
 
+def cosine_similarity_array(mp, Q, K, eps=1e-6):
+    """
+    Cosine similarity between all pairs in Q and K.
+    Q: (B, n_heads, T, d_k)
+    K: (B, n_heads, T, d_k)
+    Returns: (B, n_heads, T, T)
+    """
+    # Q, K: (B, n_heads, T, d_k)
+    Q_norm = Q / (mp.sqrt(mp.sum(Q * Q, axis=-1, keepdims=True) + eps))
+    K_norm = K / (mp.sqrt(mp.sum(K * K, axis=-1, keepdims=True) + eps))
+    # (B, n_heads, T, d_k) @ (B, n_heads, d_k, T) -> (B, n_heads, T, T)
+    return mp.matmul(Q_norm, K_norm.transpose(0, 1, 3, 2))
+
+def cosine_similarity_array_prime(mp, grad_out, Q, K, eps=1e-6):
+    """
+    Backward pass for cosine_similarity_array.
+    Q, K: (B, n_heads, T, d_k)
+    grad_out: (B, n_heads, T, T)
+    Returns: grad_Q, grad_K with same shape as Q, K
+    """
+    # Normalize Q and K
+    Q_norm = Q / (mp.sqrt(mp.sum(Q * Q, axis=-1, keepdims=True) + eps))
+    K_norm = K / (mp.sqrt(mp.sum(K * K, axis=-1, keepdims=True) + eps))
+
+    # Gradients w.r.t. Q
+    grad_Q = mp.matmul(grad_out, K_norm)  # (B, n_heads, T, d_k)
+
+    # Chain rule for normalization of Q
+    Q_sq_sum = mp.sum(Q * Q, axis=-1, keepdims=True) + eps
+    Q_norm_grad = grad_Q / mp.sqrt(Q_sq_sum)
+    Q_dot = mp.sum(Q * grad_Q, axis=-1, keepdims=True)
+    Q_norm_grad -= Q * Q_dot / (Q_sq_sum * mp.sqrt(Q_sq_sum))
+
+    # Gradients w.r.t. K
+    grad_K = mp.matmul(grad_out.transpose(0, 1, 3, 2), Q_norm)  # (B, n_heads, T, d_k)
+
+    # Chain rule for normalization of K
+    K_sq_sum = mp.sum(K * K, axis=-1, keepdims=True) + eps
+    K_norm_grad = grad_K / mp.sqrt(K_sq_sum)
+    K_dot = mp.sum(K * grad_K, axis=-1, keepdims=True)
+    K_norm_grad -= K * K_dot / (K_sq_sum * mp.sqrt(K_sq_sum))
+
+    return Q_norm_grad, K_norm_grad
+
 def cross_entropy_loss(mp, logits, targets):
     """
     Computes cross-entropy loss and its gradient with respect to logits.
@@ -145,3 +189,13 @@ def value_and_nograd(self, x, y, use_cache):
     pt_debug("Stop Cross entropy")
 
     return loss, _
+
+def split_heads(self, z):
+    B, T, H = z.shape
+    z = z.reshape(B, T, self.n_heads, self.d_k)
+    return z.transpose(0, 2, 1, 3)  # (B, n_heads, T, d_k)
+
+def merge_heads(self, z):
+    B, n_heads, T, d_k = z.shape
+    z_grad = z.transpose(0, 2, 1, 3) # (B, T, n_heads, d_k)
+    return z_grad.reshape(B, T, n_heads * d_k)

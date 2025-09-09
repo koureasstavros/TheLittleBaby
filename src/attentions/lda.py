@@ -43,19 +43,30 @@ class LDA(Module):
 
         # KV cache for inference
         self.kv_cache = None
+    
+    def set(self, mode=True):
+        super().set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.c_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
+
+        # Clear cache when switching to training mode
+        if mode:
+            self.clear_cache()
+
+    def parameters(self):
+        params = (self.k_proj.parameters() +
+                  self.v_proj.parameters() +
+                  self.c_proj.parameters() +
+                  self.depthwise_conv.parameters() +
+                  self.norm.parameters())
+        return params
         
     def clear_cache(self):
         """Clear the KV cache."""
         self.kv_cache = None
-
-    def parameters(self):
-        params = (self.k_proj.parameters() +
-              self.v_proj.parameters() +
-              self.c_proj.parameters() +
-              self.depthwise_conv.parameters() +
-              self.norm.parameters()
-              )
-        return params
 
     def flops(self, batch_size, training):
         """
@@ -93,16 +104,6 @@ class LDA(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-    
-    def set(self, mode=True):
-        super().set(mode)
-        for m in (self.k_proj, self.v_proj, self.c_proj,
-                  self.attn_dropout, self.resid_dropout):
-            m.set(mode)
-
-        # Clear cache when switching to training mode
-        if mode:
-            self.clear_cache()
 
     def forward(self, x, use_cache):
         # 1. Project K,V
@@ -141,16 +142,16 @@ class LDA(Module):
         mixed_d = self.attn_dropout.forward(mixed)
 
         # 7. Output projection
-        out = self.c_proj.forward(mixed_d)
+        c_proj_out = self.c_proj.forward(mixed_d)
 
         # 8. Residual dropout
-        out = self.resid_dropout.forward(out)
+        dropped_out = self.resid_dropout.forward(c_proj_out)
 
         # 9. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, k_lin, v_lin, gated_v, mixed)
         
-        return out
+        return dropped_out
     
     def backward(self, grad_output):
         """

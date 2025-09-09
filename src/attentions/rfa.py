@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, softmax_prime
+from src.functions.process import split_heads, merge_heads, softmax, softmax_prime
 
 class RFA(Module):
     """
@@ -42,10 +42,17 @@ class RFA(Module):
         # Recurrent memory per head
         self.memory = self.mp.zeros((1, n_heads, 1, self.d_k))
 
-    def clear_cache(self):
-        """Clear the KV cache."""
-        self.kv_cache = None
-        self.memory = self.mp.zeros_like(self.memory)
+    def set(self, mode=True):
+        super().set(mode)
+        self.q_proj.set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.c_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
+    
+        if mode:
+            self.clear_cache()
 
     def parameters(self):
         """Returns all parameters of the attention module."""
@@ -53,6 +60,11 @@ class RFA(Module):
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+
+    def clear_cache(self):
+        """Clear the KV cache."""
+        self.kv_cache = None
+        self.memory = self.mp.zeros_like(self.memory)
 
     def flops(self, batch_size, training):
         """
@@ -93,20 +105,13 @@ class RFA(Module):
 
         return flops
     
-    def forward_split_heads(self, z):
-        B, T, _ = z.shape
-        return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
-
-    def backward_unsplit_heads(self, z_grad, shape):
-        return z_grad.transpose(0, 2, 1, 3).reshape(shape)
-    
     def forward(self, x, use_cache=False):
         B, T, _ = x.shape
 
         # 1. Project input to Q, K, V
-        Q = self.forward_split_heads(self.q_proj.forward(x))  # Split and transpose Q
-        K = self.forward_split_heads(self.k_proj.forward(x))  # Split and transpose K
-        V = self.forward_split_heads(self.v_proj.forward(x))  # Split and transpose V
+        Q = split_heads(self, self.q_proj.forward(x))  # Split and transpose Q
+        K = split_heads(self, self.k_proj.forward(x))  # Split and transpose K
+        V = split_heads(self, self.v_proj.forward(x))  # Split and transpose V
 
         # Handle KV cache for inference
         if use_cache and self.kv_cache is not None:
@@ -147,13 +152,13 @@ class RFA(Module):
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
         # 7. Compute weighted sum of values
-        o = self.mp.matmul(attn_weights_dropped, V)
+        out = self.mp.matmul(attn_weights_dropped, V)
 
         # 8. Recombine heads and reshape to (B, T, head_size)
-        o_combined = o.transpose(0, 2, 1, 3).reshape(B, T, self.head_size)
+        out_combined = merge_heads(self, out)
 
         # 9. Final output projection
-        out = self.c_proj.forward(o_combined)
+        out = self.c_proj.forward(out_combined)
 
         # 10. Apply residual dropout
         out_dropped = self.resid_dropout.forward(out)
@@ -163,14 +168,14 @@ class RFA(Module):
 
         # 12. Cache intermediate values for backward pass (if needed)
         if self.setting:
-            self._cache = (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
+            self._cache = (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined)
 
         return out_dropped
 
     def backward(self, grad_output):
 
         # 1. Unpack cached values
-        (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined) = self._cache
+        (x, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined) = self._cache
 
         # 2. Backward through gradients for recurrent memory
         grad_memory = self.memory  # Gradient for recurrent memory
@@ -184,7 +189,7 @@ class RFA(Module):
 
         # 5. Backward through reshape/transpose for o_combined to get grad_o
         B, T, _ = grad_o_combined.shape
-        grad_o = grad_o_combined.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
+        grad_o = split_heads(self, grad_o_combined)
 
         # 6. Backward through weighted sum of values
         grad_attn_weights_dropped = self.mp.matmul(grad_o, V.transpose(0, 1, 3, 2))
@@ -204,9 +209,9 @@ class RFA(Module):
         grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / mt.sqrt(self.d_k)
 
         # 11. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
-        grad_Q_orig = self.backward_unsplit_heads(grad_Q, (B, T, self.head_size))
-        grad_K_orig = self.backward_unsplit_heads(grad_K, (B, T, self.head_size))
-        grad_V_orig = self.backward_unsplit_heads(grad_V, (B, T, self.head_size))
+        grad_Q_orig = merge_heads(self, grad_Q)
+        grad_K_orig = merge_heads(self, grad_K)
+        grad_V_orig = merge_heads(self, grad_V)
 
         # 12. Backward through q_proj, k_proj, v_proj
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_orig)

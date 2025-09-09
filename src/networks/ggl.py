@@ -34,6 +34,13 @@ class GGL(Module):
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)
 
+    def set(self, mode=True):
+        for linear in self.linears:
+            linear.set(mode)
+        for gate in self.gates:
+            gate.set(mode)
+        self.dropout.set(mode)
+
     def parameters(self):
         params = []
         for l, g in zip(self.linears, self.gates):

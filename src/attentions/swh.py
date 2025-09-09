@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, softmax_prime, onehot_argmax
+from src.functions.process import split_heads, merge_heads, softmax, softmax_prime, onehot_argmax
 
 class SWH(Module):
     """
@@ -55,8 +55,18 @@ class SWH(Module):
         # KV cache for inference
         self.kv_cache = None
 
-    def clear_cache(self):
-        self.kv_cache = None
+    def set(self, mode=True):
+        super().set(mode)
+        self.q_proj.set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.g_proj.set(mode)
+        self.m_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
+
+        if mode:
+            self.clear_cache()
 
     def parameters(self):
         return (self.q_proj.parameters() +
@@ -64,6 +74,9 @@ class SWH(Module):
                 self.v_proj.parameters() +
                 self.g_proj.parameters() +
                 self.m_proj.parameters())
+
+    def clear_cache(self):
+        self.kv_cache = None
 
     def flops(self, batch_size, training):
         """
@@ -103,21 +116,6 @@ class SWH(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-
-    def set(self, mode=True):
-        super().set(mode)
-        for m in (self.q_proj, self.k_proj, self.v_proj,
-                  self.g_proj, self.m_proj,
-                  self.attn_dropout, self.resid_dropout):
-            m.set(mode)
-        if mode:
-            self.clear_cache()
-
-    def forward_split_heads(self, z, B, T):
-        return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,H,T,d_k)
-
-    def backward_unsplit_heads(self, z, original_shape):
-        return z.transpose(0, 2, 1, 3).reshape(original_shape)
         
     def forward(self, x, use_cache):
         """
@@ -132,9 +130,9 @@ class SWH(Module):
         V_lin = self.v_proj.forward(x)
 
         # 2. Split heads
-        Q = self.forward_split_heads(Q_lin, B, T)
-        K_new = self.forward_split_heads(K_lin, B, T)
-        V_new = self.forward_split_heads(V_lin, B, T)
+        Q = split_heads(self, Q_lin)
+        K_new = split_heads(self, K_lin)
+        V_new = split_heads(self, V_lin)
 
         # Handle KV cache for inference
         if use_cache and not self.setting:  # Only use cache during inference
@@ -187,10 +185,10 @@ class SWH(Module):
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
         # 7. Head outputs
-        o = self.mp.matmul(attn_weights_dropped, V)  # (B,H,T_q,d_k)
+        out = self.mp.matmul(attn_weights_dropped, V)  # (B,H,T_q,d_k)
 
         # 8. Gating over heads for each token (use last T_q tokens if cache)
-        x_g_proj = x if (not use_cache or self.setting or T == o.shape[2]) else x[:, -o.shape[2]:, :]
+        x_g_proj = x if (not use_cache or self.setting or T == out.shape[2]) else x[:, -out.shape[2]:, :]
         gate_logits = self.g_proj.forward(x_g_proj) / self.temperature  # (B,T_q,H)
 
         # 9. Straight-through gating:
@@ -201,7 +199,7 @@ class SWH(Module):
 
         # 10. Mixture gating
         # Rearrange heads for mixture: (B,H,T_q,d_k) -> (B,T_q,H,d_k)
-        o_perm = o.transpose(0, 2, 1, 3)
+        o_perm = out.transpose(0, 2, 1, 3)
         # Weighted sum across heads (hard selection)
         y = self.mp.sum(gate_probs_hard[..., None] * o_perm, axis=2)  # (B,T_q,d_k)
 
@@ -209,15 +207,15 @@ class SWH(Module):
         m_proj_out = self.m_proj.forward(y)                           # (B,T_q,n_emb)
 
         # 12. Apply residual dropout
-        out = self.resid_dropout.forward(m_proj_out)
+        dropped_out = self.resid_dropout.forward(m_proj_out)
 
         # 13. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new,
-                           scores, attn_weights, attn_weights_dropped, o,
+                           scores, attn_weights, attn_weights_dropped, dropped_out,
                            gate_logits, gate_probs_soft, gate_probs_hard, o_perm)
         
-        return out
+        return dropped_out
 
     def backward(self, grad_output):
         """
@@ -227,7 +225,7 @@ class SWH(Module):
 
         # 1. Unpack cached values
         (x, Q_lin, K_lin, V_lin, Q, K_new, V_new,
-         scores, attn_weights, attn_weights_d, o,
+         scores, attn_weights, attn_weights_dropped, dropped_out,
          gate_logits, gate_probs_soft, gate_probs_hard, o_perm) = self._cache
 
         # 2. Backward through residual dropout
@@ -252,7 +250,7 @@ class SWH(Module):
         # 7. Backward through attention scores
         grad_o = grad_o_perm.transpose(0, 2, 1, 3)  # (B,H,T_q,d_k)
         grad_attn_weights_d = self.mp.matmul(grad_o, V_new.transpose(0, 1, 3, 2))   # (B,H,T_q,S)
-        grad_V_new = self.mp.matmul(attn_weights_d.transpose(0, 1, 3, 2), grad_o)   # (B,H,S,d_k)
+        grad_V_new = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_o)   # (B,H,S,d_k)
 
         # 8. Backward through dropout on attn weights
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_d)
@@ -269,9 +267,9 @@ class SWH(Module):
         grad_K_new = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) * scale
 
         # 12. Merge heads back to linear input shapes
-        grad_Q_lin = self.backward_unsplit_heads(grad_Q, Q_lin.shape)
-        grad_K_lin = self.backward_unsplit_heads(grad_K_new, K_lin.shape)
-        grad_V_lin = self.backward_unsplit_heads(grad_V_new, V_lin.shape)
+        grad_Q_lin = merge_heads(self, grad_Q)
+        grad_K_lin = merge_heads(self, grad_K_new)
+        grad_V_lin = merge_heads(self, grad_V_new)
 
         # 13. Backward q,k,v projections
         grad_x_q, q_grads = self.q_proj.backward(grad_Q_lin)

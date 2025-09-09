@@ -33,6 +33,13 @@ class MOE(Module):
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)
 
+    def set(self, mode=True):
+        super().set(mode)
+        self.g_proj.set(mode)
+        for u, d in zip(self.c_proj_up, self.c_proj_dn):
+            u.set(mode); d.set(mode)
+        self.dropout.set(mode)
+
     def parameters(self):
         params = self.g_proj.parameters()
         for u, d in zip(self.c_proj_up, self.c_proj_dn):
@@ -69,13 +76,6 @@ class MOE(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-
-    def set(self, mode=True):
-        super().set(mode)
-        self.g_proj.set(mode)
-        for u, d in zip(self.c_proj_up, self.c_proj_dn):
-            u.set(mode); d.set(mode)
-        self.dropout.set(mode)
 
     def forward(self, x):
         """

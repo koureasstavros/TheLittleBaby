@@ -24,6 +24,11 @@ class SWI(Module):
         self.c_proj_up = Linear(mp, n_emb_in, n_emb_hid, bias=True)
         self.c_proj_gt = Linear(mp, n_emb_in, n_emb_hid, bias=True)
         self.c_proj_dn = Linear(mp, n_emb_hid, n_emb_out, bias=True)
+    
+    def set(self, mode=True):
+        self.c_proj_up.set(mode)
+        self.c_proj_gt.set(mode)
+        self.c_proj_dn.set(mode)
 
     def parameters(self):
         return self.c_proj_up.parameters() + self.c_proj_gt.parameters() + self.c_proj_dn.parameters()
@@ -60,11 +65,6 @@ class SWI(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-    
-    def set(self, mode=True):
-        self.c_proj_up.set(mode)
-        self.c_proj_gt.set(mode)
-        self.c_proj_dn.set(mode)
 
     def forward(self, x):
         """

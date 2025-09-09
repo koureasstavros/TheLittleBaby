@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, softmax_prime
+from src.functions.process import split_heads, merge_heads, softmax, softmax_prime
 
 class MHA(Module):
     """
@@ -46,9 +46,19 @@ class MHA(Module):
         # KV cache for inference
         self.kv_cache = None
 
-    def clear_cache(self):
-        """Clear the KV cache."""
-        self.kv_cache = None
+    def set(self, mode=True):
+        """Sets the attention module and its sub-modules to training/eval mode."""
+        super().set(mode) # Call base Module set to set self.set
+        self.q_proj.set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.c_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
+
+        # Clear cache when switching to training mode
+        if mode:
+            self.clear_cache()
 
     def parameters(self):
         """Returns all parameters of the attention module."""
@@ -56,6 +66,10 @@ class MHA(Module):
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+
+    def clear_cache(self):
+        """Clear the KV cache."""
+        self.kv_cache = None
     
     def flops(self, batch_size, training):
         """
@@ -92,30 +106,6 @@ class MHA(Module):
 
         return flops
 
-    def set(self, mode=True):
-        """Sets the attention module and its sub-modules to training/eval mode."""
-        super().set(mode) # Call base Module set to set self.set
-        self.q_proj.set(mode)
-        self.k_proj.set(mode)
-        self.v_proj.set(mode)
-        self.c_proj.set(mode)
-        self.attn_dropout.set(mode)
-        self.resid_dropout.set(mode)
-
-        # Clear cache when switching to training mode
-        if mode:
-            self.clear_cache()
-    
-    def forward_split_heads(self, z):
-        B_s, T_s, H_s = z.shape
-        z = z.reshape(B_s, T_s, self.n_heads, self.d_k)
-        return z.transpose(0, 2, 1, 3) # (B, n_heads, T, d_k)
-    
-    def backward_unsplit_heads(self, z_grad, original_shape):
-        B_s, NH_s, T_s, DK_s = z_grad.shape
-        z_grad = z_grad.transpose(0, 2, 1, 3) # (B, T, n_heads, d_k)
-        return z_grad.reshape(original_shape) # (B, T, head_size)
-
     def forward(self, x, use_cache):
         """
         x: input tensor, shape (B, T, n_emb)
@@ -129,9 +119,9 @@ class MHA(Module):
         V_orig = self.v_proj.forward(x)  #V = X * W^V (B, T, head_size)
 
         # 2. Helper function to split heads and transpose
-        Q = self.forward_split_heads(Q_orig)
-        K_new = self.forward_split_heads(K_orig)
-        V_new = self.forward_split_heads(V_orig)
+        Q = split_heads(self, Q_orig)
+        K_new = split_heads(self, K_orig)
+        V_new = split_heads(self, V_orig)
 
         # Handle KV cache for inference
         if use_cache and not self.setting:
@@ -185,22 +175,22 @@ class MHA(Module):
 
         # 7. Compute weighted sum of values
         # (B, n_heads, T, T) @ (B, n_heads, T, d_k) -> (B, n_heads, T, d_k)
-        o = self.mp.matmul(attn_weights_dropped, V)
+        out = self.mp.matmul(attn_weights_dropped, V)
 
         # 8. Recombine heads: transpose and reshape back to (B, T, head_size)
-        o_combined = o.transpose(0, 2, 1, 3).reshape(B, T, self.head_size)
+        out_combined = merge_heads(self, out)   # (B, T, head_size)
 
         # 9. Final linear projection
-        out = self.c_proj.forward(o_combined)
+        c_proj_out = self.c_proj.forward(out_combined)
 
         # 10. Apply residual dropout
-        out_dropped = self.resid_dropout.forward(out)
+        dropped_out = self.resid_dropout.forward(c_proj_out)
 
         # 11. Cache intermediate values for backward pass
         if self.setting:
-            self._cache = (x, Q_orig, K_orig, V_orig, Q, K_new, V_new, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
-            
-        return out_dropped
+            self._cache = (x, Q_orig, K_orig, V_orig, Q, K_new, V_new, scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined)
+
+        return dropped_out
 
     def backward(self, grad_output):
         """
@@ -209,24 +199,24 @@ class MHA(Module):
         """
 
         # 1. Unpack cached values
-        (x, Q_orig, K_orig, V_orig, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined) = self._cache
+        (x, Q_orig, K_orig, V_orig, Q, K, V, scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined) = self._cache
 
         # 2. Backward through residual dropout
         grad_out_dropped, _ = self.resid_dropout.backward(grad_output) # Dropout has no params
 
         # 3. Backward through final linear projection
-        grad_o_combined, c_proj_grads = self.c_proj.backward(grad_out_dropped)
+        grad_out_combined, c_proj_grads = self.c_proj.backward(grad_out_dropped)
 
         # 4. Backward through undo reshape/transpose for o_combined to get grad_o
-        # grad_o_combined: (B, T, head_size)
-        # grad_o: (B, n_heads, T, d_k)
-        B, T, H = grad_o_combined.shape
-        grad_o = grad_o_combined.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
+        # grad_out_combined: (B, T, head_size)
+        # grad_out: (B, n_heads, T, d_k)
+        B, T, H = grad_out_combined.shape
+        grad_out = split_heads(self, grad_out_combined)
 
         # 5. Backward through matmul(attn_weights_dropped, V)
         # o = A @ V  => dL/dA = dL/do @ V.T, dL/dV = A.T @ dL/do
-        grad_attn_weights_dropped = self.mp.matmul(grad_o, V.transpose(0, 1, 3, 2))
-        grad_V = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_o)
+        grad_attn_weights_dropped = self.mp.matmul(grad_out, V.transpose(0, 1, 3, 2))
+        grad_V = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_out)
 
         # 6. Backward through attn_dropout
         grad_attn_weights, _ = self.attn_dropout.backward(grad_attn_weights_dropped)
@@ -246,9 +236,9 @@ class MHA(Module):
         grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / mt.sqrt(self.d_k)
 
         # 10. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
-        grad_Q_orig = self.backward_unsplit_heads(grad_Q, Q_orig.shape)
-        grad_K_orig = self.backward_unsplit_heads(grad_K, K_orig.shape)
-        grad_V_orig = self.backward_unsplit_heads(grad_V, V_orig.shape)
+        grad_Q_orig = merge_heads(self, grad_Q)
+        grad_K_orig = merge_heads(self, grad_K)
+        grad_V_orig = merge_heads(self, grad_V)
 
         # 11. Backward through q_proj, k_proj, v_proj
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_orig)

@@ -35,15 +35,27 @@ class AFT(Module):
 
         # KV cache for inference
         self.kv_cache = None
+    
+    def set(self, mode=True):
+        super().set(mode)
+        self.q_proj.set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.c_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
         
-    def clear_cache(self):
-        self.kv_cache = None
+        if mode:
+            self.clear_cache()
 
     def parameters(self):
         return (self.q_proj.parameters() +
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+        
+    def clear_cache(self):
+        self.kv_cache = None
 
     def flops(self, batch_size, training):
         """
@@ -87,14 +99,6 @@ class AFT(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-    
-    def set(self, mode=True):
-        super().set(mode)
-        for m in (self.q_proj, self.k_proj, self.v_proj, self.c_proj,
-                  self.attn_dropout, self.resid_dropout):
-            m.set(mode)
-        if mode:
-            self.clear_cache()
 
     def forward_exp_clip(self, x):
         return self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
@@ -193,16 +197,16 @@ class AFT(Module):
         c_in = s_d                           # gate=1
 
         # 9. Final linear projection
-        out = self.c_proj.forward(c_in)
+        c_proj_out = self.c_proj.forward(c_in)
 
         # 10. Residual dropout
-        out = self.resid_dropout.forward(out)
+        dropped_out = self.resid_dropout.forward(c_proj_out)
 
         # 11. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, k_lin, v_lin, E, S, EV, SV, s, s_d)
         
-        return out
+        return dropped_out
 
     def backward(self, grad_output):
         """

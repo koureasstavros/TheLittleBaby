@@ -39,6 +39,13 @@ class LOR(Module):
         # Dropout for regularization
         self.dropout = Dropout(mp, r_dropout)
 
+    def set(self, mode=True):
+        """Set mode for LoRA adapters and dropout (base_proj stays frozen)."""
+        super().set(mode)
+        self.c_proj_dn.set(mode)
+        self.c_proj_up.set(mode)
+        self.dropout.set(mode)
+
     def parameters(self):
         """Return only trainable LoRA parameters (A and B)."""
         return self.c_proj_dn.parameters() + self.c_proj_up.parameters()
@@ -67,13 +74,6 @@ class LOR(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-
-    def set(self, mode=True):
-        """Set mode for LoRA adapters and dropout (base_proj stays frozen)."""
-        super().set(mode)
-        self.c_proj_dn.set(mode)
-        self.c_proj_up.set(mode)
-        self.dropout.set(mode)
 
     def forward(self, x):
         """

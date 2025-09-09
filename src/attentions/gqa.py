@@ -7,7 +7,7 @@ import math as mt
 from src.module import Module
 from src.layers.linear import Linear
 from src.layers.dropout import Dropout
-from src.functions.process import softmax, softmax_prime
+from src.functions.process import split_heads, merge_heads, softmax, softmax_prime
 
 class GQA(Module):
     """
@@ -58,14 +58,26 @@ class GQA(Module):
         # KV cache for inference (stores Hkv keys/values)
         self.kv_cache = None
 
-    def clear_cache(self):
-        self.kv_cache = None
+    def set(self, mode=True):
+        super().set(mode)
+        self.q_proj.set(mode)
+        self.k_proj.set(mode)
+        self.v_proj.set(mode)
+        self.c_proj.set(mode)
+        self.attn_dropout.set(mode)
+        self.resid_dropout.set(mode)
+        
+        if mode:  # training
+            self.clear_cache()
 
     def parameters(self):
         return (self.q_proj.parameters() +
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+
+    def clear_cache(self):
+        self.kv_cache = None
     
     def flops(self, batch_size, training):
         """
@@ -112,14 +124,6 @@ class GQA(Module):
 
         return flops
 
-    def set(self, mode=True):
-        super().set(mode)
-        for m in (self.q_proj, self.k_proj, self.v_proj, self.c_proj,
-                  self.attn_dropout, self.resid_dropout):
-            m.set(mode)
-        if mode:  # training
-            self.clear_cache()
-
     def forward_split_heads_q(self, z, B, T):
         # (B,T, Hq*d_k) -> (B,Hq,T,d_k)
         return z.reshape(B, T, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
@@ -135,11 +139,11 @@ class GQA(Module):
         # (B,T, Hkv*d_k) -> (B,Hkv,T,d_k)
         return z.reshape(B, T, self.n_kv_heads, self.d_k).transpose(0, 2, 1, 3)
     
-    def backward_unsplit_q(self, z_grad, original_shape):
+    def backward_merge_q(self, z_grad, original_shape):
         # (B,Hq,T_q,d_k) -> (B,T_q,Hq*d_k)
         return z_grad.transpose(0, 2, 1, 3).reshape(original_shape)
 
-    def backward_unsplit_kv(self, z_grad, original_shape):
+    def backward_merge_kv(self, z_grad, original_shape):
         # (B,Hkv,T_kv,d_k) -> (B,T_kv,Hkv*d_k)
         return z_grad.transpose(0, 2, 1, 3).reshape(original_shape)
 
@@ -206,23 +210,23 @@ class GQA(Module):
         attn_weights_dropped = self.attn_dropout.forward(attn_weights)
 
         # 8. Calculate weighted sum: Attn @ V
-        o = self.mp.matmul(attn_weights_dropped, V_rep)                                # (B,Hq,T_q,d_k)
+        out = self.mp.matmul(attn_weights_dropped, V_rep)                                # (B,Hq,T_q,d_k)
 
         # 9. Recombine heads
-        o_combined = o.transpose(0, 2, 1, 3).reshape(B, T_q, self.head_size)  # (B,T_q,Hq*d_k)
-        
+        out_combined = merge_heads(self, out)  # (B,T_q,Hq*d_k)
+
         # 10. Final linear projection
-        out = self.c_proj.forward(o_combined)
+        out_proj = self.c_proj.forward(out_combined)
 
         # 11. Residual dropout
-        out = self.resid_dropout.forward(out)
+        out_dropped = self.resid_dropout.forward(out_proj)
 
         # 12. Cache intermediate values for backward pass
         if self.setting:
             self._cache = (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, self.group_size,
-                           scores, masked_scores, attn_weights, attn_weights_dropped, o, o_combined)
-        
-        return out
+                           scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined)
+
+        return out_dropped
 
     def backward(self, grad_output):
         """
@@ -232,7 +236,7 @@ class GQA(Module):
 
         # 1. Unpack cached values
         (x, Q_lin, K_lin, V_lin, Q, K_new, V_new, group_size,
-         scores, masked_scores, attn_weights, attn_weights_d, o, o_combined) = self._cache
+         scores, masked_scores, attn_weights, attn_weights_dropped, out, out_combined) = self._cache
 
         # 2. Backward through residual dropout
         grad_c_proj_in, _ = self.resid_dropout.backward(grad_output)
@@ -242,12 +246,12 @@ class GQA(Module):
 
         # 4. Backward through uncombine heads
         B, T_q, _ = grad_o_combined.shape
-        grad_o = grad_o_combined.reshape(B, T_q, self.n_heads, self.d_k).transpose(0, 2, 1, 3)  # (B,Hq,T_q,d_k)
+        grad_o = split_heads(self, grad_o_combined)
 
         # 5. Backward through recreate repeated V for backward
         V_rep = self.mp.repeat(V_new, repeats=group_size, axis=1)  # (B,Hq,*,d_k)
         grad_attn_weights_d = self.mp.matmul(grad_o, V_rep.transpose(0, 1, 3, 2))      # (B,Hq,T_q,actual_seq_len)
-        grad_V_rep = self.mp.matmul(attn_weights_d.transpose(0, 1, 3, 2), grad_o)      # (B,Hq,actual_seq_len,d_k)
+        grad_V_rep = self.mp.matmul(attn_weights_dropped.transpose(0, 1, 3, 2), grad_o)      # (B,Hq,actual_seq_len,d_k)
 
         # Collapse repeats back to Hkv for V
         # (B,Hq,*,d_k) -> (B,Hkv,*,d_k) by summing groups
@@ -275,9 +279,9 @@ class GQA(Module):
         grad_K_new = grad_K_rep_grouped  # (B,Hkv,*,d_k)
 
         # 11. Backward through merge head grads back to linear input shapes
-        grad_Q_lin = self.backward_unsplit_q(grad_Q, Q_lin.shape)
-        grad_K_lin = self.backward_unsplit_kv(grad_K_new, K_lin.shape)
-        grad_V_lin = self.backward_unsplit_kv(grad_V_new, V_lin.shape)
+        grad_Q_lin = self.backward_merge_q(grad_Q, Q_lin.shape)
+        grad_K_lin = self.backward_merge_kv(grad_K_new, K_lin.shape)
+        grad_V_lin = self.backward_merge_kv(grad_V_new, V_lin.shape)
 
         # 12. Backward through q,k,v projections
         grad_x_q, q_proj_grads = self.q_proj.backward(grad_Q_lin)

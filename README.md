@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.7
+version: v0.1.8
 ---
 
 # 👶 The Little Baby
@@ -124,6 +124,8 @@ The Little Baby doesn’t ask for much—just a few cozy things to get started:
 
 ## 🧪 Instructions
 To get started with this project, clone the code, download the tokenizers abd pre-trained models if needed, and follow the setup steps below to run the notebook and select your desired configuration.
+
+📺 [Watch The Little Baby on YouTube](https://www.youtube.com/watch?v=mFGstjMU1Dw)
 
 **Get objects**
   - You can access the code on GitHub (https://github.com/koureasstavros/TheLittleBaby), simply clone the repository.

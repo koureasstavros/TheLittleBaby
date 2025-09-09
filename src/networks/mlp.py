@@ -27,6 +27,13 @@ class MLP(Module):
         
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)
+    
+    def set(self, mode=True):
+        """Sets the MLP module and its sub-modules to training/eval mode."""
+        super().set(mode)
+        self.c_proj_up.set(mode)
+        self.c_proj_dn.set(mode)
+        self.dropout.set(mode)
 
     def parameters(self):
         """Returns all parameters of the MLP module."""
@@ -62,13 +69,6 @@ class MLP(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-    
-    def set(self, mode=True):
-        """Sets the MLP module and its sub-modules to training/eval mode."""
-        super().set(mode)
-        self.c_proj_up.set(mode)
-        self.c_proj_dn.set(mode)
-        self.dropout.set(mode)
 
     def forward(self, x):
         """

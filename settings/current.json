@@ -1,5 +1,5 @@
 {
-    "c_device": "cpu",
+    "c_device": "gpu",
     "c_device_cpu_cores": "16",
     "c_device_gpu_core": "0",
     "c_device_gpu_cuda": "auto",
@@ -13,7 +13,7 @@
     "n_emb": 128,
     "head_size": 128,
     "n_heads": 16,
-    "n_layers": 4,
+    "n_layers": 16,
     "num_epochs": 1,
     "batch_size": 16,
     "r_dropout": 0.1,

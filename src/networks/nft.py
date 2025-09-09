@@ -46,14 +46,22 @@ class NFT(Module):
         # KV cache for inference
         self.kv_cache = None
 
-    def clear_cache(self):
-        self.kv_cache = None
+    def set(self, mode=True):
+        super().set(mode)
+        for m in (self.q_proj, self.k_proj, self.v_proj, self.c_proj,
+                  self.attn_dropout, self.resid_dropout):
+            m.set(mode)
+        if mode:
+            self.clear_cache()
 
     def parameters(self):
         return (self.q_proj.parameters() +
                 self.k_proj.parameters() +
                 self.v_proj.parameters() +
                 self.c_proj.parameters())
+
+    def clear_cache(self):
+        self.kv_cache = None
 
     def flops(self, batch_size, training):
         """
@@ -96,14 +104,6 @@ class NFT(Module):
             flops *= 3  # forward + backward + update
 
         return flops
-
-    def set(self, mode=True):
-        super().set(mode)
-        for m in (self.q_proj, self.k_proj, self.v_proj, self.c_proj,
-                  self.attn_dropout, self.resid_dropout):
-            m.set(mode)
-        if mode:
-            self.clear_cache()
 
     def forward_exp_clip(self, x):
         return self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
