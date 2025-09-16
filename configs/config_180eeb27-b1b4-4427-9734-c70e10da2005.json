@@ -1,0 +1,31 @@
+{
+    "c_device": "cpu",
+    "c_device_cpu_cores": "16",
+    "c_device_gpu_core": "0",
+    "c_device_gpu_cuda": "auto",
+    "c_device_gpu_tensor": "0",
+    "c_tokenizer": "char",
+    "c_sequence": "pre",
+    "c_attention": "mha",
+    "c_network": "mlp",
+    "c_optimizer": "adamw",
+    "n_ctx": 16,
+    "n_emb": 128,
+    "s_head": 128,
+    "n_heads": 16,
+    "n_layers": 16,
+    "n_epochs": 1,
+    "s_batch": 16,
+    "r_dropout": 0.1,
+    "r_learn": 0.001,
+    "s_warmup": "none",
+    "c_shuffle": false,
+    "r_split": 0.9,
+    "runtime": {
+        "model_version": "v0.0.1",
+        "model_params": 3199553,
+        "model_size": 12798212,
+        "device_name": "13th Gen Intel(R) Core(TM) i7-1360P",
+        "device_cores": "16"
+    }
+}

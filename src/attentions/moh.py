@@ -16,23 +16,23 @@ class MOH(Module):
     Replaces concat+linear with weighted sum across heads + projection.
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, head_size, n_heads):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads):
         super().__init__()
-        assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
+        assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.head_size = head_size
+        self.s_head = s_head
         self.n_heads = n_heads
 
-        d_k = head_size // n_heads
+        d_k = s_head // n_heads
         self.d_k = d_k
 
         # Standard Q,K,V
-        self.q_proj = Linear(mp, n_emb, head_size, bias=False)  #W^Q
-        self.k_proj = Linear(mp, n_emb, head_size, bias=False)  #W^K
-        self.v_proj = Linear(mp, n_emb, head_size, bias=False)  #W^V
+        self.q_proj = Linear(mp, n_emb, s_head, bias=False)  #W^Q
+        self.k_proj = Linear(mp, n_emb, s_head, bias=False)  #W^K
+        self.v_proj = Linear(mp, n_emb, s_head, bias=False)  #W^V
 
         # Gating: produce logits over heads per token
         self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
@@ -83,7 +83,7 @@ class MOH(Module):
         flops = 0
 
         # Q, K, V projections: (B, T, n_emb) x (n_emb, head_size)
-        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.head_size * 2
+        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.s_head * 2
 
         # Attention score computation: Q @ K^T
         flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2

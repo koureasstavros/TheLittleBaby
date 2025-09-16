@@ -17,26 +17,26 @@ class SWH(Module):
     - Backward uses straight-through estimator: gradients flow as if softmax (stable training)
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, head_size, n_heads, temperature=1.0):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads, temperature=1.0):
         super().__init__()
-        assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
+        assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.head_size = head_size
+        self.s_head = s_head
         self.n_heads = n_heads
 
-        d_k = head_size // n_heads
+        d_k = s_head // n_heads
         self.d_k = d_k
 
         temperature = max(1e-6, float(temperature))
         self.temperature = temperature
 
         # Projections
-        self.q_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.k_proj = Linear(mp, n_emb, head_size, bias=False)
-        self.v_proj = Linear(mp, n_emb, head_size, bias=False)
+        self.q_proj = Linear(mp, n_emb, s_head, bias=False)
+        self.k_proj = Linear(mp, n_emb, s_head, bias=False)
+        self.v_proj = Linear(mp, n_emb, s_head, bias=False)
 
         # Gating over heads
         self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
@@ -88,7 +88,7 @@ class SWH(Module):
         flops = 0
 
         # Q, K, V projections
-        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.head_size * 2
+        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.s_head * 2
 
         # Attention score computation: Q @ K^T (local window)
         flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
@@ -103,7 +103,7 @@ class SWH(Module):
         flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
 
         # Output projection
-        flops += batch_size * self.n_ctx * self.head_size * self.n_emb * 2
+        flops += batch_size * self.n_ctx * self.s_head * self.n_emb * 2
 
         # Bias add for output projection
         if self.m_proj.bias is not None:

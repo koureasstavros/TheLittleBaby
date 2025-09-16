@@ -2,8 +2,6 @@
 /.vs/
 # Ignore the entire vscode directory
 /.vscode/
-# Ignore the entire configs directory
-/configs/
 # Ignore the entire models directory
 /models/
 # Ignore the entire tokenizers directory

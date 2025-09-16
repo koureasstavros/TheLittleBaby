@@ -1,0 +1,31 @@
+{
+    "c_device": "gpu",
+    "c_device_cpu_cores": "16",
+    "c_device_gpu_core": "0",
+    "c_device_gpu_cuda": "auto",
+    "c_device_gpu_tensor": "0",
+    "c_tokenizer": "char",
+    "c_sequence": "pre",
+    "c_attention": "gqa",
+    "c_network": "lor",
+    "c_optimizer": "adamw",
+    "n_ctx": 128,
+    "n_emb": 128,
+    "s_head": 128,
+    "n_heads": 16,
+    "n_layers": 4,
+    "n_epochs": 1,
+    "s_batch": 16,
+    "r_dropout": 0.1,
+    "r_learn": 0.001,
+    "s_warmup": "none",
+    "c_shuffle": false,
+    "r_split": 0.9,
+    "runtime": {
+        "model_version": "v0.1.0",
+        "model_params": 212579,
+        "model_size": 850316,
+        "device_name": "NVIDIA RTX A500 Laptop GPU",
+        "device_cores": "all"
+    }
+}

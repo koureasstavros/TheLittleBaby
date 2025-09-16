@@ -62,7 +62,7 @@ class CharTokenizer:
             'vocab_size': self.vocab_size
         }
     
-    def tokenize(self, text):
+    def tokenize(self, text, c_shuffle, r_split):
         """ Tokenize input text and return data. """        
         
         # Fit the tokenizer to the text
@@ -70,7 +70,15 @@ class CharTokenizer:
 
         # Encode the text
         data = self.encode(text)
-        split = int(0.9 * len(data))
+
+        # Shuffle the data
+        if c_shuffle:
+            indices = self.mp.arange(len(data))
+            self.mp.random.shuffle(indices)
+            data = [data[i] for i in indices]
+
+        # Split into training and validation sets
+        split = int(r_split * len(data))
         train_data = data[:split]
         val_data = data[split:]
 

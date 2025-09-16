@@ -1,13 +1,14 @@
 {
     "n_epochs": 1,
+    "dataset": "sophocles",
     "avg_train_time_per_batch": 0.5313881243341481,
     "train_batches_per_epoch": 15957,
     "avg_val_time_per_batch": 0.02997701019252548,
     "val_batches_per_epoch": 1766,
     "average_train_loss_per_epoch": 1.5629455816282958,
     "average_val_loss_per_epoch": 1.7870563874317051,
-    "average_time_per_epoch": 8814.467606401443,
-    "total_time": 8814.467606401443,
+    "average_time_per_epoch": 8814.467606401444,
+    "total_time": 8814.467606401444,
     "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/15957 | train_loss = 4.5979 | execution_time = 0.6859",

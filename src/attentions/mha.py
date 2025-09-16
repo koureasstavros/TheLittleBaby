@@ -14,26 +14,26 @@ class MHA(Module):
     Multi-Head Self-Attention mechanism.
     Computes attention scores and combines information from different "heads".
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, head_size, n_heads):
+    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads):
         super().__init__()        
-        assert head_size % n_heads == 0, "head_size must be divisible by n_heads"
+        assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.head_size = head_size
+        self.s_head = s_head
         self.n_heads = n_heads
 
-        d_k = head_size // n_heads
+        d_k = s_head // n_heads
         self.d_k = d_k
 
         # Linear projections for Query, Key, Value
-        self.q_proj = Linear(mp, n_emb, head_size, bias=False)  #W^Q
-        self.k_proj = Linear(mp, n_emb, head_size, bias=False)  #W^K
-        self.v_proj = Linear(mp, n_emb, head_size, bias=False)  #W^V
+        self.q_proj = Linear(mp, n_emb, s_head, bias=False)  #W^Q
+        self.k_proj = Linear(mp, n_emb, s_head, bias=False)  #W^K
+        self.v_proj = Linear(mp, n_emb, s_head, bias=False)  #W^V
 
         # Output projection
-        self.c_proj = Linear(mp, head_size, n_emb, bias=True)
+        self.c_proj = Linear(mp, s_head, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -83,7 +83,7 @@ class MHA(Module):
 
         # Q, K, V projections: (B, T, n_emb) x (n_emb, head_size)
         # Multiply–add counted as 2 FLOPs
-        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.head_size * 2
+        flops += 3 * batch_size * self.n_ctx * self.n_emb * self.s_head * 2
 
         # Attention score computation: Q @ K^T
         flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
@@ -95,7 +95,7 @@ class MHA(Module):
         flops += batch_size * self.n_heads * self.n_ctx * self.n_ctx * self.d_k * 2
 
         # Output projection: (B, T, head_size) x (head_size, n_emb)
-        flops += batch_size * self.n_ctx * self.head_size * self.n_emb * 2
+        flops += batch_size * self.n_ctx * self.s_head * self.n_emb * 2
 
         # Bias add for output projection
         if self.c_proj.bias is not None:

@@ -5,6 +5,7 @@
 
 import re
 import os
+import csv
 import sys
 import uuid
 import json
@@ -26,20 +27,28 @@ def pt_debug(text):
     if debug:
         print(f"[DEBUG] {text}")
 
+def cnvt_name(file_path):
+    name_only = os.path.splitext(file_path)[0]
+    return name_only
+
 def from_file(file_path, file_mode):
     try:
         if file_mode == "plain":
             with open(file_path, "r") as f:
-                file = f.read()
-                return file
+                content = f.read()
+                return content
         elif file_mode == "binary":
             with open(file_path, "rb") as f:
-                file = f.read()
-                return file
+                content = f.read()
+                return content
+        elif file_mode == "csv":
+            with open(file_path, "r") as f:
+                content = csv.reader(f)
+                return list(content)
         elif file_mode == "json":
             with open(file_path, "r") as f:
-                file = json.load(f)
-                return file
+                content = json.load(f)
+                return content
     except FileNotFoundError:
         print(f"File {file_path} not found.")
         sys.exit(1)
@@ -52,6 +61,10 @@ def towa_file(file_path, file_mode, content):
         elif file_mode == "binary":
             with open(file_path, "wb") as f:
                 f.write(content)
+        elif file_mode == "csv":
+            with open(file_path, "w", newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(content)
         elif file_mode == "json":
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(content, f, ensure_ascii=False, indent=4)

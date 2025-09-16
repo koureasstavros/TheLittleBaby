@@ -1,5 +1,6 @@
 {
     "n_epochs": 1,
+    "dataset": "sophocles",
     "avg_train_time_per_batch": 0.6848334586701762,
     "train_batches_per_epoch": 15957,
     "avg_val_time_per_batch": 0.05254614949037372,

@@ -1,6 +1,12 @@
 ## 📦 Changelog
 In this changelog, you can find a concise summary of all the updates made to the software—ranging from new features and performance improvements to bug fixes. It serves as a transparent record that helps users track the evolution of the software across different versions. Whether you're looking for what's new, what's changed, or what’s been resolved, the changelog is your go-to snapshot of progress.
 
+- Version v0.1.10
+  - Added expirements
+  - Aligned naming conventions
+  - Added c_shuffle option into tokenizer for shuffling input data before split
+  - Added r_split option into tokenizer for spliting input data into training and validation
+
 - Version v0.1.9
   - Added expirements
   - Minor notebook fix

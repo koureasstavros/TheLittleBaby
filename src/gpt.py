@@ -80,16 +80,19 @@ class GPT(Module):
         else:
             raise ValueError(f"Unsupported device type: {device}. Supported types are 'cpu' and 'gpu'.")
     
-        print(f"{'-'*10} {'Using Configuration'} {'-'*10}" )
+        print(f"{'-'*10} {'Using Configuration'} {'-'*10}")
         for key, value in config.items():
             if key != "runtime":
                 print(f"{key}: {value}")
 
+        # Set computation library
         self.mp = mp
 
+        # Store device info
         self.device_name = device_name
         self.device_cores = device_cores
 
+        # Initialize attributes
         self.config_dict = None
         self.report_dict = None
         self.tokenizer_dict = None
@@ -106,20 +109,20 @@ class GPT(Module):
         self.config_dict = config
         self.n_emb = config["n_emb"]
         self.n_ctx = config["n_ctx"]
+        self.s_head = config["s_head"]
+        self.n_heads = config["n_heads"]
         self.r_dropout = config["r_dropout"]
         self.n_layers = config["n_layers"]
-        self.head_size = config["head_size"]
-        self.n_heads = config["n_heads"]
 
         # Model components
         self.vocab_size = 1 # Placeholder for vocabulary size, should updated
-        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)                           # Tokenizer
-        self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)                      # Token embeddings
-        self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)                           # Positional embeddings
-        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.r_dropout, self.head_size, self.n_heads)
-                    for _ in range(self.n_layers)]                                      # Stack of tokenizer blocks
-        self.ln_f = Normalization(self.mp, self.n_emb)                                  # Final Layer Normalization
-        self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size, bias=True)          # Language modeling head (output logits)
+        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)     # Tokenizer
+        self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)                              # Token embeddings
+        self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)                                   # Positional embeddings
+        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.r_dropout, self.s_head, self.n_heads)
+                    for _ in range(self.n_layers)]                                              # Stack of tokenizer blocks
+        self.ln_f = Normalization(self.mp, self.n_emb)                                          # Final Layer Normalization
+        self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size, bias=True)                  # Language modeling head (output logits)
         
     def parameters(self):
         """Returns all parameters of the GPT model."""
@@ -485,8 +488,11 @@ class GPT(Module):
     def config_towa_dict(self):     
         """ Config to a JSON file. """
         self.config_dict["runtime"] = {
+            "model_version": "v0.1.0",
             "model_params": self.count_parameters(),
-            "device_name": self.device_name, "device_cores": self.device_cores
+            "model_size": self.count_totalsize(),
+            "device_name": self.device_name,
+            "device_cores": self.device_cores
             }
         return self.config_dict
 
@@ -500,7 +506,13 @@ class GPT(Module):
     
     def count_parameters(self):
         """Return the total number of parameters in the model."""
-        return sum(p.size for p in self.parameters())
+        total_params = sum((p.size for p in self.parameters()))
+        return total_params
+    
+    def count_totalsize(self):
+        """Return the total size of parameters in the model."""
+        total_size = sum(p.size for p in self.parameters()) * 4
+        return total_size
 
     def backup(model):
         """ Backup the model weights and configuration. """
@@ -514,12 +526,15 @@ class GPT(Module):
         model._parameters = model_.parameters()
         return model
 
-    def train(self, input_text, train_cache, n_epochs, batch_size, r_learn, s_warmup):
+    def train(self, input_name, input_text, train_cache, n_epochs, s_batch, r_learn, s_warmup, c_shuffle, r_split):
         """ Train the GPT model on the provided input data. """
         print(f"{'-'*10} {'Training in progress'} {'-'*10}" )
 
+        # File name from path
+        file_name = os.path.basename(input_name)
+
         # Tokenize the input data
-        train_data, val_data = self.tokenizer.tokenize(input_text)        
+        train_data, val_data = self.tokenizer.tokenize(input_text, c_shuffle, r_split)        
 
         # Create the tokenizer object
         tokenizer_dict = self.tokenizer.towa_dict()
@@ -562,7 +577,7 @@ class GPT(Module):
             train_batch_cnt = 0
             train_batch_all = 0
 
-            train_batches = list(self.tokenizer.get_batches(X_train, y_train, batch_size, shuffle=True))
+            train_batches = list(self.tokenizer.get_batches(X_train, y_train, s_batch, shuffle=True))
             train_batch_all = len(train_batches)
             if not train_batches:
                 print(f"Epoch {epoch+1}/{n_epochs} | No training data batches available. Skipping training for this epoch.")
@@ -570,7 +585,7 @@ class GPT(Module):
             else:
                 for X_batch, y_batch in train_batches:
                     train_batch_cnt += 1
-                    train_batch_start_time = tm.time()  # Record start time
+                    train_batch_start_time = tm.time() # Record start time
                     # Adjust learning rate during warm-up
                     optimizer.set_r_learn(r_learn, train_batch_cnt, train_batch_all, s_warmup)
                     # Compute loss and gradients
@@ -578,7 +593,7 @@ class GPT(Module):
                     # Update model parameters using the optimizer
                     optimizer.step(grads)
                     running_train_loss += loss
-                    train_batch_stop_time = tm.time()  # Record stop time
+                    train_batch_stop_time = tm.time() # Record stop time
                     train_batch_elapsed_time = train_batch_stop_time - train_batch_start_time
                     train_batch_total_time += train_batch_elapsed_time
                     # Print loss for the current batch
@@ -596,7 +611,7 @@ class GPT(Module):
             val_batch_cnt = 0
             val_batch_all = 0
 
-            val_batches = list(self.tokenizer.get_batches(X_val, y_val, batch_size, shuffle=False))
+            val_batches = list(self.tokenizer.get_batches(X_val, y_val, s_batch, shuffle=False))
             val_batch_all = len(val_batches)
             if not val_batches:
                 print(f"Epoch {(epoch+1)}/{n_epochs} | No validation data batches available. Skipping validation for this epoch.")
@@ -604,11 +619,11 @@ class GPT(Module):
             else:
                 for X_batch, y_batch in val_batches:
                     val_batch_cnt += 1
-                    val_batch_start_time = tm.time()  # Record start time
+                    val_batch_start_time = tm.time() # Record start time
                     # In validation, only forward pass and loss computation are needed
                     loss, _ = value_and_nograd(self, X_batch, y_batch, train_cache)
                     running_val_loss += loss
-                    val_batch_stop_time = tm.time()  # Record stop time
+                    val_batch_stop_time = tm.time() # Record stop time
                     val_batch_elapsed_time = val_batch_stop_time - val_batch_start_time 
                     val_batch_total_time += val_batch_elapsed_time
                     # Print loss for the current batch
@@ -640,6 +655,7 @@ class GPT(Module):
         # Create the report object
         report_dict = {
             "n_epochs": n_epochs,
+            "dataset": file_name,
             "avg_train_time_per_batch": float(avg_train_time_per_batch),
             "train_batches_per_epoch": int(train_batch_all),
             "avg_val_time_per_batch": float(avg_val_time_per_batch),

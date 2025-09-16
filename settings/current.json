@@ -7,16 +7,18 @@
     "c_tokenizer": "char",
 	"c_sequence": "pre",
     "c_attention": "mha",
-    "c_network": "mlp",
+    "c_network": "lor",
     "c_optimizer": "adamw",
     "n_ctx": 128,
     "n_emb": 128,
-    "head_size": 128,
+    "s_head": 128,
     "n_heads": 16,
-    "n_layers": 4,
+    "n_layers": 16,
     "n_epochs": 1,
-    "batch_size": 16,
+    "s_batch": 16,
     "r_dropout": 0.1,
     "r_learn": 0.001,
-    "s_warmup": "none"
+    "s_warmup": "none",
+    "c_shuffle": false,
+    "r_split": 0.9
 }

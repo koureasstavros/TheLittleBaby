@@ -1,5 +1,6 @@
 {
     "n_epochs": 1,
+    "dataset": "shakespeare",
     "avg_train_time_per_batch": 0.5571783028641585,
     "train_batches_per_epoch": 62741,
     "avg_val_time_per_batch": 0.3381814947640224,
