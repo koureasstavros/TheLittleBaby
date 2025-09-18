@@ -26,6 +26,8 @@
         "model_params": 1601089,
         "model_size": 6404356,
         "device_name": "13th Gen Intel(R) Core(TM) i7-1360P",
-        "device_cores": "16"
+        "device_cores": "16",
+        "library_version": "2.1.0",
+        "library_driver": "default"
     }
 }

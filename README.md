@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.10
+version: v0.1.11
 ---
 
 # 👶 The Little Baby
@@ -133,11 +133,10 @@ To get started with this project, clone the code, download the tokenizers abd pr
 
 **Get objects**
   - You can access the code on GitHub (https://github.com/koureasstavros/TheLittleBaby), simply clone the repository.
-  - You can access the pre-trained tokenizers and models on Hugging Face (https://huggingface.co/koureasstavros/TheLittleBaby), simply download the config, tokenizer and model files. In case you have low speed internet connection check the analysis table select a guid and pick a specific guid for config, tokenizer and model. The config, tokenizer and model files are needed only if you are going to perform finetune or inference without training your own.
+  - You can access the pre-trained tokenizers and models on Hugging Face (https://huggingface.co/koureasstavros/TheLittleBaby), simply download the tokenizer and model files. In case you have low speed internet connection check the analysis table select a guid and pick a specific guid for config, tokenizer and model. The config, tokenizer and model files are needed only if you are going to perform finetune or inference without training your own.
   - Then, you should:
-    - place the config file or config files into the configs folder.
-    - place the tokenizer file or tokenizer files into the tokenizers folder.
-    - place the model file or model files into the models folder.
+    - place the tokenizer file or tokenizer files into the tokenizers folder in the same file structure.
+    - place the model file or model files into the models folder in the same file structure, make sure about enough space.
 
 **Configure Environment**
   - Based on the environment different posibilities and features are available

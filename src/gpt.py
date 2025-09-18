@@ -49,6 +49,8 @@ class GPT(Module):
             import numpy as mp
             device_name = get_cpu_properties(mp)
             device_cores = str(cpu_cores)
+            library_version = str(mp.__version__)
+            library_driver = "default"
             print(f"Processor: {device_name}")
 
         elif device == "gpu":
@@ -60,6 +62,8 @@ class GPT(Module):
                 load_package(["cupy-cuda11x"])
             elif config["c_device_gpu_cuda"] == "cuda12":
                 load_package(["cupy-cuda12x"])
+            elif config["c_device_gpu_cuda"] == "cuda13":
+                load_package(["cupy-cuda13x"])
             os.environ["CUPY_TF32"] = config["c_device_gpu_tensor"] #[0=FP32, 1=TF32]
             os.environ["CUPY_ACCELERATORS"] = "cub,cutensor,cutensornet"
             # Load package after environment variables are set
@@ -73,6 +77,8 @@ class GPT(Module):
             print(f"Configured GPU core id: {selected_core}")
             device_name = get_gpu_properties(mp, selected_core)
             device_cores = "all"
+            library_version = str(mp.__version__)
+            library_driver = str(mp.cuda.runtime.runtimeGetVersion())
             mp.cuda.Device(int(selected_core)).use()
             mp.get_default_memory_pool().free_all_blocks()
             mp.cuda.Device().synchronize()
@@ -91,6 +97,10 @@ class GPT(Module):
         # Store device info
         self.device_name = device_name
         self.device_cores = device_cores
+
+        # Store library info
+        self.library_version = library_version
+        self.library_driver = library_driver
 
         # Initialize attributes
         self.config_dict = None
@@ -492,7 +502,9 @@ class GPT(Module):
             "model_params": self.count_parameters(),
             "model_size": self.count_totalsize(),
             "device_name": self.device_name,
-            "device_cores": self.device_cores
+            "device_cores": self.device_cores,
+            "library_version": self.library_version,
+            "library_driver": self.library_driver
             }
         return self.config_dict
 

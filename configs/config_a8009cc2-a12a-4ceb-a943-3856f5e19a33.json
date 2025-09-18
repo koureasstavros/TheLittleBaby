@@ -26,6 +26,8 @@
         "model_params": 4470371,
         "model_size": 17881484,
         "device_name": "NVIDIA RTX A500 Laptop GPU",
-        "device_cores": "all"
+        "device_cores": "all",
+        "library_version": "13.6.0",
+        "library_driver": "12060"
     }
 }

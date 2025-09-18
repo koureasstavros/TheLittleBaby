@@ -7,7 +7,7 @@
     "c_tokenizer": "char",
 	"c_sequence": "pre",
     "c_attention": "mha",
-    "c_network": "lor",
+    "c_network": "mlp",
     "c_optimizer": "adamw",
     "n_ctx": 128,
     "n_emb": 128,
