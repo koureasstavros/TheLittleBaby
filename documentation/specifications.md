@@ -2,6 +2,16 @@
 ## 🧠 Further Thoughts
 
  Let’s imagine what shiny new toys and big upgrades the little language model needs to turn into a grown-up large language model who knows all about the big wide world!
+ 
+
+ **Known float types**
+| Format | Bits | Exponent Bits | Mantissa Bits | Approx. Scale | Approx. Precision | Use Case Highlights |
+|-----|-----|-----|-----|----------|----------|--------------------|
+| float16 | 16 | 5 | 10 | ~6.55 × 10⁴ | ~3.3 digits | Deep learning inference, memory-constrained devices |
+| float32 | 32 | 8 | 23 | ~3.4 × 10³⁸ | ~7.2 digits | General computing, graphics, ML training |
+| float64 | 64 | 11 | 52 | ~1.8 × 10³⁰⁸ | ~15.9 digits | Scientific computing, simulations |
+| TF32 | 32 | 8 | 10 (stored) | ~3.4 × 10³⁸ | ~3 digits | NVIDIA Tensor Cores, fast AI training |
+
 
  **Known data sets**
 
@@ -11,6 +21,7 @@
 | open | train | RedPajama v1 | 1T |
 | open | train | RedPajama v2 | 30T |
 | open | eval | HellaSwag | 30T |
+
 
 **Known language models**
 

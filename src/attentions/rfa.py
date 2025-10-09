@@ -15,22 +15,24 @@ class RFA(Module):
     - Local sliding window attention for short-term context
     - Recurrent memory vector per head for long-term context
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads, window_size):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window):
         super().__init__()
         assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
+        self.r_temp = r_temp
         self.s_head = s_head
         self.n_heads = n_heads
-        self.d_k = s_head // n_heads
-        self.window_size = window_size
+        self.s_window = s_window
 
-        self.q_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.k_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.v_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.c_proj = Linear(mp, s_head, n_emb, bias=True)
+        self.d_k = s_head // n_heads
+
+        self.q_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.k_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.c_proj = Linear(mp, d_type, s_head, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -79,16 +81,16 @@ class RFA(Module):
         flops += 3 * batch_size * self.n_ctx * self.n_emb * self.s_head * 2
 
         # Attention score computation: Q @ K^T (local window)
-        flops += batch_size * self.n_heads * self.n_ctx * self.window_size * self.d_k * 2
+        flops += batch_size * self.n_heads * self.n_ctx * self.s_window * self.d_k * 2
 
         # Masking
-        flops += batch_size * self.n_heads * self.n_ctx * self.window_size
+        flops += batch_size * self.n_heads * self.n_ctx * self.s_window
 
         # Softmax over local window
-        flops += batch_size * self.n_heads * self.n_ctx * self.window_size * 5
+        flops += batch_size * self.n_heads * self.n_ctx * self.s_window * 5
 
         # Weighted sum: Attn @ V
-        flops += batch_size * self.n_heads * self.n_ctx * self.window_size * self.d_k * 2
+        flops += batch_size * self.n_heads * self.n_ctx * self.s_window * self.d_k * 2
 
         # Output projection
         flops += batch_size * self.n_ctx * self.s_head * self.n_emb * 2
@@ -122,7 +124,7 @@ class RFA(Module):
         self.kv_cache = (K, V)
 
         # 2. Compute attention scores
-        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)
+        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / (mt.sqrt(self.d_k) * self.r_temp)
 
         # 3. Create and apply masks (local sliding window or causal mask)
         actual_seq_len = K.shape[2]
@@ -131,7 +133,7 @@ class RFA(Module):
         # 4. Apply causal mask (prevents attending to future tokens)
         if use_cache:
             # Always sliding window when using KV cache
-            local_mask = (idxs[None, :] >= idxs[:, None] - self.window_size) & (idxs[None, :] <= idxs[:, None])
+            local_mask = (idxs[None, :] >= idxs[:, None] - self.s_window) & (idxs[None, :] <= idxs[:, None])
             local_mask = self.mp.where(local_mask, 0, -1e9)
             # In cache mode with T==1, only keep last query row
             if T == 1 and actual_seq_len > 1:

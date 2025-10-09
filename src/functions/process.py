@@ -129,7 +129,13 @@ def cross_entropy_loss(mp, logits, targets):
     Returns: (loss_value, grad_logits)
     """
     B, T, C = logits.shape
+    if pt_debug:
+        assert not mp.isnan(logits).any(), "logits contain NaN"
+        assert not mp.isinf(logits).any(), "logits contain Inf"
     logits_flat = logits.reshape(B * T, C)
+    if pt_debug:
+        assert not mp.isnan(targets).any(), "targets contain NaN"
+        assert not mp.isinf(targets).any(), "targets contain Inf"
     targets_flat = targets.reshape(B * T)
 
     # For numerical stability: subtract max logit from all logits before exponentiation

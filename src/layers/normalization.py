@@ -11,13 +11,17 @@ class Normalization(Module):
     Normalizes features across the last dimension.
     It does use trainable parameters (gamma and beta).
     """
-    def __init__(self, mp, dims, eps=1e-5):
+    def __init__(self, mp, dtype, dims, eps=1e-5):
         super().__init__()
         self.mp = mp
         self.eps = eps
-        
-        self.gamma = self.mp.ones(dims)  # Learnable scaling parameter
-        self.beta = self.mp.zeros(dims)  # Learnable shifting parameter
+        self.dtype = dtype
+
+        # Initialize gamma with random values
+        self.gamma = self.mp.ones(dims, dtype=self.dtype)  # Learnable scaling parameter
+        # Initialize beta with random values
+        self.beta = self.mp.zeros(dims, dtype=self.dtype)  # Learnable shifting parameter
+        # Syncronize Parameters
         self.synchronize()
 
     def synchronize(self):

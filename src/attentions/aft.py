@@ -15,19 +15,20 @@ class AFT(Module):
     - Inference: running sums S, SV with sliding window up to n_ctx
     Params order (unchanged): q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, clip):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.clip = clip
+        self.r_temp = r_temp
+        self.r_clip = r_clip
 
         # Projections
-        self.q_proj = Linear(mp, n_emb, n_emb, bias=False)  # kept for parameter order, unused in forward
-        self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
+        self.q_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)  # kept for parameter order, unused in forward
+        self.k_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.c_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -101,12 +102,12 @@ class AFT(Module):
         return flops
 
     def forward_exp_clip(self, x):
-        return self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
+        return self.mp.exp(self.mp.clip(x, -self.r_clip, self.r_clip))
 
     def backward_exp_clip(self, grad, x):
         # Gradient is grad_E * exp(k_lin) within the clipping range, 0 otherwise
-        grad_x = grad * self.mp.exp(self.mp.clip(x, -self.clip, self.clip))
-        grad_x *= (x >= -self.clip) * (x <= self.clip)  # Zero out gradients outside the range
+        grad_x = grad * self.mp.exp(self.mp.clip(x, -self.r_clip, self.r_clip))
+        grad_x *= (x >= -self.r_clip) * (x <= self.r_clip)  # Zero out gradients outside the range
         return grad_x
 
     def forward_cumsum(self, x):
@@ -126,6 +127,9 @@ class AFT(Module):
         # Only K and V projections are used
         k_lin = self.k_proj.forward(x)  # (B,T,D)
         v_lin = self.v_proj.forward(x)  # (B,T,D)
+
+        # Apply temperature scaling to k_lin before exp/clip
+        k_lin_scaled = k_lin / self.r_temp
 
         # Handle KV cache for inference
         if use_cache and not self.setting:
@@ -178,7 +182,7 @@ class AFT(Module):
 
         # 3. Compute E = exp(K) and prefix sums S
         eps = 1e-9
-        E = self.forward_exp_clip(k_lin)     # (B,T,D)
+        E = self.forward_exp_clip(k_lin_scaled)     # (B,T,D)
 
         # 4. Compute cumulative sums
         S = self.forward_cumsum(E)           # (B,T,D)

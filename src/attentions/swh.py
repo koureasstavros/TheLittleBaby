@@ -17,32 +17,30 @@ class SWH(Module):
     - Backward uses straight-through estimator: gradients flow as if softmax (stable training)
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads, temperature=1.0):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         super().__init__()
         assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
+        self.r_temp = r_temp
         self.s_head = s_head
         self.n_heads = n_heads
 
         d_k = s_head // n_heads
         self.d_k = d_k
 
-        temperature = max(1e-6, float(temperature))
-        self.temperature = temperature
-
         # Projections
-        self.q_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.k_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.v_proj = Linear(mp, n_emb, s_head, bias=False)
+        self.q_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.k_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
 
         # Gating over heads
-        self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
+        self.g_proj = Linear(mp, d_type, n_emb, n_heads, bias=False)
 
         # Project selected head d_k -> n_emb
-        self.m_proj = Linear(mp, self.d_k, n_emb, bias=True)
+        self.m_proj = Linear(mp, d_type, d_k, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -163,7 +161,7 @@ class SWH(Module):
         
         # 3. Compute scaled dot-product attention scores
         # (B, n_heads, T, d_k) @ (B, n_heads, d_k, actual_seq_len) -> (B, n_heads, T, actual_seq_len)
-        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)
+        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / (mt.sqrt(self.d_k)* self.r_temp)
 
         # 4. Apply causal mask (prevents attending to future tokens)
         # Adjust mask for the actual sequence lengths
@@ -189,7 +187,7 @@ class SWH(Module):
 
         # 8. Gating over heads for each token (use last T_q tokens if cache)
         x_g_proj = x if (not use_cache or self.setting or T == out.shape[2]) else x[:, -out.shape[2]:, :]
-        gate_logits = self.g_proj.forward(x_g_proj) / self.temperature  # (B,T_q,H)
+        gate_logits = self.g_proj.forward(x_g_proj) / self.r_temp  # (B,T_q,H)
 
         # 9. Straight-through gating:
         # - Forward uses hard one-hot of argmax

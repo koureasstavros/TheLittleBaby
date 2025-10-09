@@ -1,5 +1,5 @@
 #########################
-# Tokenizer Definition
+# Optimizer Definition
 # Author: Koureas Stavros
 #########################
 

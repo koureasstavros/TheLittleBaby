@@ -10,13 +10,16 @@ class Linear(Module):
     Performs y = x @ W + b.
     It does use trainable parameters (weights and bias).
     """
-    def __init__(self, mp, in_features, out_features, bias=True):
+    def __init__(self, mp, d_type, in_features, out_features, bias=True):
         super().__init__()
         self.mp = mp
+        self.d_type = d_type
         
         # Initialize weights with small random values
-        self.weight = self.mp.random.randn(in_features, out_features) * 0.02
-        self.bias = self.mp.zeros(out_features) if bias else None
+        self.weight = (self.mp.random.randn(in_features, out_features) * 0.02).astype(self.d_type)
+        # Initialize bias with small random values
+        self.bias = self.mp.zeros(out_features, dtype=self.d_type) if bias else None
+        # Syncronize Parameters
         self.synchronize()
 
     def synchronize(self):
@@ -30,6 +33,7 @@ class Linear(Module):
         x: input tensor, shape (..., in_features)
         Returns: output tensor, shape (..., out_features)
         """
+        x = x.astype(self.d_type)
         self._cache = x # Store input for backward pass
         out = x.dot(self.weight)
         

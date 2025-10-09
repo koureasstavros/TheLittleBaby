@@ -1,5 +1,5 @@
 #########################
-# Tokenizer Definition
+# Attention Definition
 # Author: Koureas Stavros
 #########################
 
@@ -12,21 +12,21 @@ from src.attentions.lda import LDA
 from src.attentions.rfa import RFA
 
 class Attention:
-    def __new__(cls, mp, c_attention, n_ctx, n_emb, r_dropout, s_head, n_heads):
+    def __new__(cls, mp, c_attention, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         match c_attention:
             case "mha":
-                return MHA(mp, n_ctx, n_emb, r_dropout, s_head, n_heads)
+                return MHA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)
             case "moh":
-                return MOH(mp, n_ctx, n_emb, r_dropout, s_head, n_heads)
+                return MOH(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)
             case "gqa":
-                return GQA(mp, n_ctx, n_emb, r_dropout, s_head, n_heads)
+                return GQA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, n_kv_heads=None)
             case "swh":
-                return SWH(mp, n_ctx, n_emb, r_dropout, s_head, n_heads)
+                return SWH(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)
             case "aft":
-                return AFT(mp, n_ctx, n_emb, r_dropout, clip=20.0)
+                return AFT(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip=20.0)
             case "lda":
-                return LDA(mp, n_ctx, n_emb, r_dropout, kernel_size=8)
+                return LDA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel=8)
             case "rfa":
-                return RFA(mp, n_ctx, n_emb, r_dropout, s_head, n_heads, window_size=8)
+                return RFA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window=8)
             case _:
                 raise ValueError(f"Unknown attention type: {c_attention}")

@@ -18,21 +18,22 @@ class LDA(Module):
     - Complexity: O(B·T·D)
     Params order: k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, kernel_size):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.kernel_size = kernel_size
+        self.r_temp = r_temp
+        self.s_kernel = s_kernel
 
         # Projections
-        self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
+        self.k_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.c_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
 
         # Depthwise conv layer
-        self.depthwise_conv = DepthwiseConv1D(mp, n_emb, kernel_size)
+        self.depthwise_conv = DepthwiseConv1D(mp, d_type, n_emb, s_kernel)
 
         # Dropouts
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -88,7 +89,7 @@ class LDA(Module):
         flops += 2 * batch_size * self.n_ctx * self.n_emb
 
         # Depthwise convolution: each channel has kernel_size multiplications per position
-        flops += batch_size * self.n_ctx * self.n_emb * self.kernel_size * 2  # multiply–add ×2
+        flops += batch_size * self.n_ctx * self.n_emb * self.s_kernel * 2  # multiply–add ×2
 
         # Output projection: (B, T, D) x (D, D)
         flops += batch_size * self.n_ctx * self.n_emb * self.n_emb * 2
@@ -110,8 +111,11 @@ class LDA(Module):
         k_lin = self.k_proj.forward(x)
         v_lin = self.v_proj.forward(x)
 
+        # Apply temperature scaling to k_lin before gating
+        k_lin_scaled = k_lin / self.r_temp
+
         # 2. Elementwise gate
-        gated_v = k_lin * v_lin
+        gated_v = k_lin_scaled * v_lin
 
         # Handle KV cache for inference
         if use_cache and not self.setting:
@@ -120,7 +124,7 @@ class LDA(Module):
             else:
                 # Append and keep only last kernel_size-1 + current tokens
                 self.kv_cache = self.mp.concat([self.kv_cache, gated_v], axis=1)
-                max_len = self.kernel_size - 1 + gated_v.shape[1]
+                max_len = self.s_kernel - 1 + gated_v.shape[1]
                 if self.kv_cache.shape[1] > max_len:
                     self.kv_cache = self.kv_cache[:, -max_len:, :]
             # Always use the cache for context
@@ -203,7 +207,7 @@ class LDA(Module):
         return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
-        self.kernel_size = int(weights_dict[f'block_{i}_lda_kernel_size'])
+        self.s_kernel = int(weights_dict[f'block_{i}_lda_kernel_size'])
         self.k_proj.weight = weights_dict[f'block_{i}_lda_k_weight']
         self.v_proj.weight = weights_dict[f'block_{i}_lda_v_weight']
         self.c_proj.weight = weights_dict[f'block_{i}_lda_c_weight']
@@ -218,7 +222,7 @@ class LDA(Module):
         self.c_proj.synchronize()
 
     def towa_dict(self, weights_dict, i):
-        weights_dict[f'block_{i}_lda_kernel_size'] = self.kernel_size
+        weights_dict[f'block_{i}_lda_kernel_size'] = self.s_kernel
         weights_dict[f'block_{i}_lda_k_weight'] = self.k_proj.weight
         weights_dict[f'block_{i}_lda_v_weight'] = self.v_proj.weight
         weights_dict[f'block_{i}_lda_c_weight'] = self.c_proj.weight

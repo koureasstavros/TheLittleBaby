@@ -14,7 +14,7 @@ class MOE(Module):
     y = sum_e softmax(gate(x))_e * Expert_e(x)
     Each Expert_e: Linear_up -> GELU -> Linear_down -> Dropout
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, n_expansion, n_experts):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_expansion, n_experts):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -24,11 +24,11 @@ class MOE(Module):
         self.n_experts = n_experts
 
         # Gating linear (no bias for simplicity)
-        self.g_proj = Linear(mp, n_emb, n_experts, bias=False)
+        self.g_proj = Linear(mp, d_type, n_emb, n_experts, bias=False)
 
         # Experts: separate parameter sets
-        self.c_proj_up = [Linear(mp, n_emb, n_expansion * n_emb, bias=True) for _ in range(n_experts)]
-        self.c_proj_dn = [Linear(mp, n_expansion * n_emb, n_emb, bias=True) for _ in range(n_experts)]
+        self.c_proj_up = [Linear(mp, d_type, n_emb, n_expansion * n_emb, bias=True) for _ in range(n_experts)]
+        self.c_proj_dn = [Linear(mp, d_type, n_expansion * n_emb, n_emb, bias=True) for _ in range(n_experts)]
 
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)

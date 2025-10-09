@@ -15,7 +15,7 @@ class LIN(Module):
     - Complexity: O(B·T·D)
     Params order: c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, use_gate):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -24,11 +24,11 @@ class LIN(Module):
         self.use_gate = use_gate
 
         # Main projection
-        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
+        self.c_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
 
         # Optional gate projection
         if use_gate:
-            self.g_proj = Linear(mp, n_emb, n_emb, bias=True)
+            self.g_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
         else:
             self.g_proj = None
 

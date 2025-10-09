@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.12
+version: v0.1.13
 ---
 
 # 👶 The Little Baby
@@ -284,12 +284,19 @@ These hyperparameters collectively define the training process, where a model's 
   - Speed: Network choice impacts model speed.
   - Quality: Network choice impacts representational richness and efficiency.
 
+- **d_type**
+
+  - Values: ["fp16", "fp32", "fp64"]
+  - What it is: This is an experimental setting which controlls the capacity of the floats used to initiate the modules and later perform all calculations durring the training or inference. The value should be always set to fp32 and only enable the tf32 (a tensor float 32) into gpu, if the gpu supports it.
+  - Speed: The size of the floats has relationship with the speed of the process of mathematical operations. A larger value can decrease the speed, while a smaller value can increase the speed.
+  - Quality: The size of the floats has relationship with the quality of the process. A larger value can increase the quality, while a smaller value can decrease the quality based on given dataset size.
+
 - **n_ctx**
 
   - Values: [8 : ****]
   - What it is: The maximum number of tokens (characters, in this case) the model can look at in a single sequence to make a prediction. It's the model's "attention span".
   - Size: Directly increases the size of the positional embedding table (n_ctx x n_emb), adding more parameters to the model.
-  - Speed: Has a major impact. The self-attention mechanism's computation grows quadratically with the context length (O(n_ctx²)). Doubling n_ctx will roughly quadruple the time and memory needed for the attention layers, making it one of the most expensive parameters to increase.
+  - Speed: The self-attention mechanism's computation grows quadratically with the context length (O(n_ctx²)). Doubling n_ctx will roughly quadruple the time and memory needed for the attention layers, making it one of the most expensive parameters to increase.
   - Quality: A larger n_ctx allows the model to learn longer-range dependencies in the text, which can significantly improve quality for tasks that require understanding context over long passages.
 
 - **n_emb**
@@ -347,6 +354,14 @@ These hyperparameters collectively define the training process, where a model's 
   - Size: Has no impact on the size of the model.
   - Speed: Has a negligible impact on training speed and no impact on inference speed (it's disabled during evaluation).
   - Quality: Crucial for improving model generalization and preventing overfitting. By forcing the network to learn redundant representations, it makes the model more robust. The value (e.g., 0.1) is the probability of a neuron being dropped.
+
+- **r_temp**
+
+  - Values: [0.000001 : 1]
+  - What it is: It controls the sharpness of the attention distribution. 
+  - Size: Has no impact on the size of the model.
+  - Speed: Has a negligible impact on training speed or inference speed.
+  - Quality: A higher r_temp value make the distribution softer (more spread out). while lower r_temp value make the output more "peaky" (focuses more on a few positions).
 
 - **r_learn**
 

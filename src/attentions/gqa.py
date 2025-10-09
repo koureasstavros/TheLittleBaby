@@ -17,13 +17,14 @@ class GQA(Module):
     - Each KV head is shared across group_size = n_heads // n_kv_heads query heads
     Params order: q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads, n_kv_heads=None):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, n_kv_heads):
         super().__init__()
         assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
+        self.r_temp = r_temp
         self.s_head = s_head
         self.n_heads = n_heads
 
@@ -40,12 +41,12 @@ class GQA(Module):
         self.group_size = group_size
 
         # Projections: Q -> (Hq*d_k), K,V -> (Hkv*d_k)
-        self.q_proj = Linear(mp, n_emb, s_head, bias=False)
-        self.k_proj = Linear(mp, n_emb, n_kv_heads * d_k, bias=False)
-        self.v_proj = Linear(mp, n_emb, n_kv_heads * d_k, bias=False)
+        self.q_proj = Linear(mp, d_type, n_emb, s_head, bias=False)
+        self.k_proj = Linear(mp, d_type, n_emb, n_kv_heads * d_k, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, n_kv_heads * d_k, bias=False)
 
         # Output projection back to n_emb (from concatenated Hq heads)
-        self.c_proj = Linear(mp, s_head, n_emb, bias=True)
+        self.c_proj = Linear(mp, d_type, s_head, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -193,7 +194,7 @@ class GQA(Module):
         V_rep = self.mp.repeat(V, repeats=self.group_size, axis=1)
 
         # 4. Scaled dot-product attention
-        scores = self.mp.matmul(Q, K_rep.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)  # (B,Hq,T_q,actual_seq_len)
+        scores = self.mp.matmul(Q, K_rep.transpose(0, 1, 3, 2)) / (mt.sqrt(self.d_k) * self.r_temp)  # (B,Hq,T_q,actual_seq_len)
 
         # 5. Apply causal mask (prevents attending to future tokens)
         if use_cache and T_q == 1 and actual_seq_len > 1:

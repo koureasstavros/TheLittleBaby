@@ -1,5 +1,5 @@
 #########################
-# Transformer Block
+# Block Definition
 # Author: Koureas Stavros
 #########################
 
@@ -14,16 +14,16 @@ class Block(Module):
     Consists of Norm, Attention, Network
     Includes residual connections.
     """
-    def __init__(self, mp, c_sequence, c_attention, c_network, n_emb, n_ctx, r_dropout, head_size, n_heads):
+    def __init__(self, mp, c_sequence, c_attention, c_network, d_type, n_emb, n_ctx, r_dropout, r_temp, head_size, n_heads):
         super().__init__()
         self.c_sequence = c_sequence  # "pre" or "post"
         self.c_attention = c_attention  # "mha" or "moh"
         self.c_network = c_network  # "mlp" or "moe"
 
-        self.ln_1 = Normalization(mp, n_emb)
-        self.att = Attention(mp, c_attention, n_ctx, n_emb, r_dropout, head_size, n_heads)
-        self.ln_2 = Normalization(mp, n_emb)
-        self.net = Network(mp, c_network, n_ctx, n_emb, r_dropout)
+        self.ln_1 = Normalization(mp, d_type, n_emb)
+        self.att = Attention(mp, c_attention, d_type, n_ctx, n_emb, r_dropout, r_temp, head_size, n_heads)
+        self.ln_2 = Normalization(mp, d_type, n_emb)
+        self.net = Network(mp, c_network, d_type, n_ctx, n_emb, r_dropout)
 
     def parameters(self):
         """Returns all parameters of the Transformer Block."""

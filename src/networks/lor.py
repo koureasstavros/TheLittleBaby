@@ -17,7 +17,7 @@ class LOR(Module):
         r is the rank,
         alpha is a scaling factor.
     """
-    def __init__(self, mp, n_ctx, n_emb, n_out, r_dropout, rank=4, alpha=1.0):
+    def __init__(self, mp, d_type, n_ctx, n_emb, n_out, r_dropout, rank=4, alpha=1.0):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -29,12 +29,12 @@ class LOR(Module):
         self.scaling = alpha / rank
 
         # Frozen base projection (pretrained)
-        self.c_proj = Linear(mp, n_emb, n_out, bias=True)
+        self.c_proj = Linear(mp, d_type, n_emb, n_out, bias=True)
         self.c_proj.set(mode=False)  # Keep frozen by default
 
         # LoRA trainable adapters
-        self.c_proj_dn = Linear(mp, n_emb, rank, bias=False)
-        self.c_proj_up = Linear(mp, rank, n_out, bias=False)
+        self.c_proj_dn = Linear(mp, d_type, n_emb, rank, bias=False)
+        self.c_proj_up = Linear(mp, d_type, rank, n_out, bias=False)
 
         # Dropout for regularization
         self.dropout = Dropout(mp, r_dropout)

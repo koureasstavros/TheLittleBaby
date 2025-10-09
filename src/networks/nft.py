@@ -24,7 +24,7 @@ class NFT(Module):
 
     Params order preserved: q_proj, k_proj, v_proj, c_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, use_gate, clip):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate, clip):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -34,10 +34,10 @@ class NFT(Module):
         self.clip = float(clip)
 
         # Projections
-        self.q_proj = Linear(mp, n_emb, n_emb, bias=False) # used only if use_gate=True
-        self.k_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.v_proj = Linear(mp, n_emb, n_emb, bias=False)
-        self.c_proj = Linear(mp, n_emb, n_emb, bias=True)
+        self.q_proj = Linear(mp, d_type, n_emb, n_emb, bias=False) # used only if use_gate=True
+        self.k_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.v_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
+        self.c_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)

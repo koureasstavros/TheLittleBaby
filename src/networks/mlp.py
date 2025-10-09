@@ -13,7 +13,7 @@ class MLP(Module):
     Multi-Layer Perceptron block, typically used in Transformer after attention.
     Consists of two linear layers with GELU activation and dropout.
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, n_expansion):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_expansion):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -21,9 +21,9 @@ class MLP(Module):
         self.r_dropout = r_dropout
 
         # First linear layer (expands dimension)
-        self.c_proj_up = Linear(mp, n_emb, n_expansion * n_emb, bias=True)
+        self.c_proj_up = Linear(mp, d_type, n_emb, n_expansion * n_emb, bias=True)
         # Second linear layer (projects back to original dimension)
-        self.c_proj_dn = Linear(mp, n_expansion * n_emb, n_emb, bias=True)
+        self.c_proj_dn = Linear(mp, d_type, n_expansion * n_emb, n_emb, bias=True)
         
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)

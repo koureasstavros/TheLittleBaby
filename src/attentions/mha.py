@@ -14,13 +14,14 @@ class MHA(Module):
     Multi-Head Self-Attention mechanism.
     Computes attention scores and combines information from different "heads".
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         super().__init__()        
         assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
+        self.r_temp = r_temp
         self.s_head = s_head
         self.n_heads = n_heads
 
@@ -28,12 +29,12 @@ class MHA(Module):
         self.d_k = d_k
 
         # Linear projections for Query, Key, Value
-        self.q_proj = Linear(mp, n_emb, s_head, bias=False)  #W^Q
-        self.k_proj = Linear(mp, n_emb, s_head, bias=False)  #W^K
-        self.v_proj = Linear(mp, n_emb, s_head, bias=False)  #W^V
+        self.q_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^Q
+        self.k_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^K
+        self.v_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^V
 
         # Output projection
-        self.c_proj = Linear(mp, s_head, n_emb, bias=True)
+        self.c_proj = Linear(mp, d_type, s_head, n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -152,7 +153,7 @@ class MHA(Module):
         
         # 3. Compute scaled dot-product attention scores
         # (B, n_heads, T, d_k) @ (B, n_heads, d_k, actual_seq_len) -> (B, n_heads, T, actual_seq_len)
-        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / mt.sqrt(self.d_k)
+        scores = self.mp.matmul(Q, K.transpose(0, 1, 3, 2)) / (mt.sqrt(self.d_k) * self.r_temp)
 
         # 4. Apply causal mask (prevents attending to future tokens)
         # Adjust mask for the actual sequence lengths

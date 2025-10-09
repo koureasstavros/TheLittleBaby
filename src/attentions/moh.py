@@ -16,13 +16,14 @@ class MOH(Module):
     Replaces concat+linear with weighted sum across heads + projection.
     Params order: q_proj, k_proj, v_proj, g_proj, m_proj
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, s_head, n_heads):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         super().__init__()
         assert s_head % n_heads == 0, "head_size must be divisible by n_heads"
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
+        self.r_temp = r_temp
         self.s_head = s_head
         self.n_heads = n_heads
 
@@ -30,15 +31,15 @@ class MOH(Module):
         self.d_k = d_k
 
         # Standard Q,K,V
-        self.q_proj = Linear(mp, n_emb, s_head, bias=False)  #W^Q
-        self.k_proj = Linear(mp, n_emb, s_head, bias=False)  #W^K
-        self.v_proj = Linear(mp, n_emb, s_head, bias=False)  #W^V
+        self.q_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^Q
+        self.k_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^K
+        self.v_proj = Linear(mp, d_type, n_emb, s_head, bias=False)  #W^V
 
         # Gating: produce logits over heads per token
-        self.g_proj = Linear(mp, n_emb, n_heads, bias=False)
+        self.g_proj = Linear(mp, d_type, n_emb, n_heads, bias=False)
 
         # Projection after mixture (d_k -> n_emb)
-        self.m_proj = Linear(mp, self.d_k, self.n_emb, bias=True)
+        self.m_proj = Linear(mp, d_type, self.d_k, self.n_emb, bias=True)
 
         # Dropout layers
         self.attn_dropout = Dropout(mp, r_dropout)
@@ -158,7 +159,7 @@ class MOH(Module):
             T_q = T
 
         # 3. Compute attention scores
-        scores = self.mp.matmul(Q, K.transpose(0,1,3,2)) / mt.sqrt(self.d_k)  # (B,H,T_q,total_len)
+        scores = self.mp.matmul(Q, K.transpose(0,1,3,2)) / (mt.sqrt(self.d_k) * self.r_temp)  # (B,H,T_q,total_len)
 
         # 4. Apply causal mask (prevents attending to future tokens)
         if use_cache and T_q == 1 and actual_seq_len > 1:
@@ -179,7 +180,7 @@ class MOH(Module):
 
         # 8. Compute gating logits and probabilities
         x_g_proj = x if (not use_cache or self.setting or T == out.shape[2]) else x[:, -out.shape[2]:, :]
-        gate_logits = self.g_proj.forward(x_g_proj)  # (B,T_q,H)
+        gate_logits = self.g_proj.forward(x_g_proj) / self.r_temp  # (B,T_q,H)
 
         # 9. Softmax over gating logits
         gate_probs = softmax(self.mp, gate_logits, axis=-1)    # (B,T_q,H)

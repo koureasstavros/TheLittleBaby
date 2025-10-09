@@ -11,7 +11,7 @@ class SWI(Module):
     SwiGLU: Gated MLP variant using Swish activation.
     y = Linear1(x) * swish(Linear2(x)), then projected by Linear3.
     """
-    def __init__(self, mp, n_ctx, n_emb_in, n_emb_out, n_expansion):
+    def __init__(self, mp, d_type, n_ctx, n_emb_in, n_emb_out, n_expansion):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
@@ -21,9 +21,9 @@ class SWI(Module):
         self.n_emb_out = n_emb_out
 
         # Projection layers
-        self.c_proj_up = Linear(mp, n_emb_in, n_emb_hid, bias=True)
-        self.c_proj_gt = Linear(mp, n_emb_in, n_emb_hid, bias=True)
-        self.c_proj_dn = Linear(mp, n_emb_hid, n_emb_out, bias=True)
+        self.c_proj_up = Linear(mp, d_type, n_emb_in, n_emb_hid, bias=True)
+        self.c_proj_gt = Linear(mp, d_type, n_emb_in, n_emb_hid, bias=True)
+        self.c_proj_dn = Linear(mp, d_type, n_emb_hid, n_emb_out, bias=True)
     
     def set(self, mode=True):
         self.c_proj_up.set(mode)

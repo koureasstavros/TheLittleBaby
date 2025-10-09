@@ -117,22 +117,32 @@ class GPT(Module):
 
         # Model architecture parameters
         self.config_dict = config
-        self.n_emb = config["n_emb"]
+
+        match config["d_type"]:
+            case "fp64":
+                self.d_type = mp.float64
+            case "fp32":
+                self.d_type = mp.float32
+            case "fp16":
+                self.d_type = mp.float16
+
         self.n_ctx = config["n_ctx"]
+        self.n_emb = config["n_emb"]
         self.s_head = config["s_head"]
         self.n_heads = config["n_heads"]
         self.r_dropout = config["r_dropout"]
+        self.r_temp = max(1e-6, float(config["r_temp"]))
         self.n_layers = config["n_layers"]
 
         # Model components
         self.vocab_size = 1 # Placeholder for vocabulary size, should updated
         self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)     # Tokenizer
-        self.wte = Embedding(self.mp, self.vocab_size, self.n_emb)                              # Token embeddings
-        self.wpe = Embedding(self.mp, self.n_ctx, self.n_emb)                                   # Positional embeddings
-        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.n_emb, self.n_ctx, self.r_dropout, self.s_head, self.n_heads)
+        self.wte = Embedding(self.mp, self.d_type, self.vocab_size, self.n_emb)                              # Token embeddings
+        self.wpe = Embedding(self.mp, self.d_type, self.n_ctx, self.n_emb)                                   # Positional embeddings
+        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.d_type, self.n_emb, self.n_ctx, self.r_dropout, self.r_temp, self.s_head, self.n_heads)
                     for _ in range(self.n_layers)]                                              # Stack of tokenizer blocks
-        self.ln_f = Normalization(self.mp, self.n_emb)                                          # Final Layer Normalization
-        self.lm_head = Linear(self.mp, self.n_emb, self.vocab_size, bias=True)                  # Language modeling head (output logits)
+        self.ln_f = Normalization(self.mp, self.d_type, self.n_emb)                                          # Final Layer Normalization
+        self.lm_head = Linear(self.mp, self.d_type, self.n_emb, self.vocab_size, bias=True)                  # Language modeling head (output logits)
         
     def parameters(self):
         """Returns all parameters of the GPT model."""
@@ -405,7 +415,7 @@ class GPT(Module):
         weights_dict = {}
         for key, value in json_weights_dict.items():
             if value is not None and isinstance(value, list):
-                weights_dict[key] = self.mp.array(value, dtype=self.mp.float32)
+                weights_dict[key] = self.mp.array(value, dtype=self.d_type)
             else:
                 weights_dict[key] = value
 

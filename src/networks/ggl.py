@@ -15,7 +15,7 @@ class GGL(Module):
     - Each group has its own linear + gate
     - Merge back to full embedding
     """
-    def __init__(self, mp, n_ctx, n_emb, r_dropout, n_groups):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_groups):
         super().__init__()
         assert n_emb % n_groups == 0
         self.mp = mp
@@ -26,10 +26,10 @@ class GGL(Module):
         self.group_dim = n_emb // n_groups
 
         # Linear layers for each group
-        self.linears = [Linear(mp, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
+        self.linears = [Linear(mp, d_type, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
 
         # Gating layers for each group
-        self.gates = [Linear(mp, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
+        self.gates = [Linear(mp, d_type, self.group_dim, self.group_dim, bias=False) for _ in range(n_groups)]
 
         # Dropout layer
         self.dropout = Dropout(mp, r_dropout)

@@ -10,12 +10,14 @@ class Embedding(Module):
     Embedding layer.
     Maps integer indices to dense vectors.
     """
-    def __init__(self, mp, num_embeddings, embedding_dim):
+    def __init__(self, mp, dtype, num_embeddings, embedding_dim):
         super().__init__()
         self.mp = mp
-        
+        self.dtype = dtype
+
         # Initialize weights with small random values
-        self.weight = self.mp.random.randn(num_embeddings, embedding_dim) * 0.02
+        self.weight = self.mp.random.randn(num_embeddings, embedding_dim).astype(self.dtype) * 0.02  # Learnable scaling parameter
+        # Syncronize Parameters
         self.synchronize()
 
     def synchronize(self):
