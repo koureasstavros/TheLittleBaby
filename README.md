@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.13
+version: v0.1.14
 ---
 
 # 👶 The Little Baby
@@ -17,6 +17,15 @@ version: v0.1.13
 **The Little Baby** is a minimalist language model crafted entirely in **pure Python using just Numpy / CuPy**. It requires no external packages, libraries, or frameworks to function. Both **training** and **inference** are achieved through low-level operations and hand-built logic — making this project ideal for educational deep dives and experimental tinkering.
 
 This repository is designed to reveal the **inner mechanics** of a GPT-style transformer model and demystify the "magic" behind modern language models through readable and hackable code.
+
+
+## 💖 Sponsor
+
+This project is freely available to everyone, but your support as a sponsor can make a real difference. By sponsoring, you help us unlock the resources needed to explore new experimental directions—ranging from advanced attention mechanisms to richer network architectures, parameter tuning, and hyperparameter optimization. Our long-term goal is to scale these efforts to well-known, larger datasets and push the boundaries of what’s possible.
+
+[🏷️ Sponshor this Project through GitHub](https://github.com/sponsors/koureasstavros) --and let your support shine through GitHub.
+
+[🏷️ Sponshor this Project through PayPal](https://www.paypal.com/donate/?hosted_button_id=E6E5D545H683E) --If you're looking for a donation platform other than GitHub.
 
 
 ## 🎯 Audience
