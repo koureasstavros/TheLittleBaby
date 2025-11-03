@@ -138,6 +138,8 @@ The Little Baby doesn’t ask for much—just a few cozy things to get started:
 ## 🧪 Instructions
 To get started with this project, clone the code, download the tokenizers abd pre-trained models if needed, and follow the setup steps below to run the notebook and select your desired configuration.
 
+![Engineering](material/lookandfeel.png)
+
 📺 [Watch The Little Baby on YouTube](https://www.youtube.com/watch?v=mFGstjMU1Dw)
 
 **Get objects**
@@ -230,15 +232,15 @@ Here come the smartest little settings to help the model learn and grow big and 
 These hyperparameters collectively define the training process, where a model's architecture—specified by its depth (n_layers), width (n_emb), attention span (n_ctx), and attention mechanism (n_heads, head_size)—is optimized over a set number of num_epochs using a specific batch_size and learning rate (lr), with dropout applied to improve generalization.
 
 - **c_device**
-
-  - Values: cpu, gpu
+  - Type: string/option
+  - Values: ["cpu", "gpu"]
   - What it is: Specifies the hardware device used for executing model operations—either the central processing unit (cpu) or the graphics processing unit (gpu).
   - Size: While it doesn’t directly affect parameter count, it can influence model deployment size due to differences in memory handling and batch processing capabilities.
   - Speed: While it doesn’t directly affect parameter count, it significantly impacts model speed—gpu enables faster parallel computation, whereas cpu is better suited for lightweight or sequential tasks.
   - Quality: Device choice doesn’t alter model accuracy, but slower execution on cpu may affect responsiveness in real-time applications, while gpu allows for more efficient training and inference cycles.
 
 - **c_device_cpu_cores**
-
+  - Type: int
   - Values: [1, *]
   - What it is: Specifies the number of CPU cores available for executing model operations.
   - Size: Doesn’t directly affect model parameter count, but may influence memory allocation and parallel processing capacity.
@@ -246,7 +248,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: No direct impact on model accuracy, but limited cores may reduce responsiveness in real-time or multi-threaded environments.
 
 - **c_device_gpu_core**
-
+  - Type: int
   - Values: [0, *]
   - What it is: Identifies the specific GPU core or device used for model execution.
   - Size: Doesn’t change model parameters, but selecting a more powerful GPU can enable larger batch sizes and more complex models.
@@ -254,7 +256,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: Indirectly improves training and inference quality by enabling faster iteration and better resource utilization.
 
 - **c_device_gpu_tensor**
-
+  - Type: bool/int
   - Values: [0, 1]
   - What it is: Refers to the tensor-level operations executed on the GPU, typically involving matrix multiplications and attention mechanisms.
   - Size: Doesn’t alter parameter count, but efficient tensor handling allows for larger models and more scalable training.
@@ -262,102 +264,102 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: Enhances model performance by supporting high-throughput computation, especially in large-scale or multi-modal architectures.
 
 - **c_tokenizer**
-
-  - Values: [char]
+  - Type: string/option
+  - Values: ["char"]
   - What it is: Strategy for tokenizing sequences.
   - Size: While it doesn’t directly affect parameter count, it does influence model size due to differences in vocabulary structure.
   - Speed: While it doesn’t directly affect parameter count, it does influence model speed due to differences in vocabulary structure.
   - Quality: When texts contain errors, it can negatively affect training and inference quality.
 
 - **c_sequence**
-
-  - Values: [pre, post]
+  - Type: string/option
+  - Values: ["pre", "post"]
   - What it is: Strategy for constructing block sequences.
   - Size: No direct impact on model size.
   - Speed: No direct impact on performance.
   - Quality: Proper sequence construction affects how well long dependencies are exposed. Future variants could improve learning efficiency on heterogeneous corpora.
 
 - **c_attention**
-
-  - Values: [mha, moh, gqa, swh, aft]
+  - Type: string/option
+  - Values: ["mha", "moh", "gqa", "swh", "lda", "rfa", "aft"]
   - What it is: Chosen attention mechanism implementation.
   - Size: Attention choice impacts model size. 
   - Speed: Attention choice impacts model speed.
   - Quality: Attention choice influences how diverse relational patterns are captured.
 
 - **c_network**
-
-  - Values: [mlp, moe, lor, swi, nft]
+  - Type: string/option
+  - Values: ["mlp", "moe", "lor", "swi", "lin", "ggl", "nft"]
   - What it is: Chosen network mechanism implementation.
   - Size: Network choice impacts model size. 
   - Speed: Network choice impacts model speed.
   - Quality: Network choice impacts representational richness and efficiency.
 
 - **d_type**
-
+  - Type: string/option
   - Values: ["fp16", "fp32", "fp64"]
   - What it is: This is an experimental setting which controlls the capacity of the floats used to initiate the modules and later perform all calculations durring the training or inference. The value should be always set to fp32 and only enable the tf32 (a tensor float 32) into gpu, if the gpu supports it.
   - Speed: The size of the floats has relationship with the speed of the process of mathematical operations. A larger value can decrease the speed, while a smaller value can increase the speed.
   - Quality: The size of the floats has relationship with the quality of the process. A larger value can increase the quality, while a smaller value can decrease the quality based on given dataset size.
 
 - **n_ctx**
-
-  - Values: [8 : ****]
+  - Type: int/poweroftwo
+  - Values: [8 : *]
   - What it is: The maximum number of tokens (characters, in this case) the model can look at in a single sequence to make a prediction. It's the model's "attention span".
   - Size: Directly increases the size of the positional embedding table (n_ctx x n_emb), adding more parameters to the model.
   - Speed: The self-attention mechanism's computation grows quadratically with the context length (O(n_ctx²)). Doubling n_ctx will roughly quadruple the time and memory needed for the attention layers, making it one of the most expensive parameters to increase.
   - Quality: A larger n_ctx allows the model to learn longer-range dependencies in the text, which can significantly improve quality for tasks that require understanding context over long passages.
 
 - **n_emb**
-
-  - Values: [8 : ****]
+  - Type: int/poweroftwo
+  - Values: [8 : *]
   - What it is: The size of the vector used to represent each token. It defines the "width" of the model.
   - Size: Has a major impact on model size. It increases the size of token and positional embeddings, and scales the weight matrices in the attention and MLP layers, significantly increasing the total parameter count.
   - Speed: Increasing n_emb increases the size of nearly all weight matrices in the model. This leads to more parameters, which increases both memory usage and the time required for matrix multiplications. The impact is significant but generally more linear than n_ctx.
   - Quality: A larger n_emb gives the model more capacity to learn rich, complex representations of tokens and their relationships. This can lead to a more powerful and accurate model, but also increases the risk of overfitting if the model is too large for the dataset.
 
 - **head_size**
-  
-  - Values: [8 : ****]
+  - Type: int/poweroftwo  
+  - Values: [8 : *]
   - What it is: The total dimensionality of the concatenated attention heads. This dimension is projected from the input embedding (n_emb) to create the Query, Key, and Value matrices.
   - Size: Directly increases the number of parameters in each attention block by defining the size of the Q, K, V, and output projection matrices.
   - Speed: Directly affects the size of the Q, K, and V projection matrices. A larger head_size increases the number of computations and memory usage within each attention block.
   - Quality: A larger head_size gives the model more representational power within the attention mechanism. It must be divisible by n_heads.
 
 - **n_heads**
-
-  - Values: [1 : ****]
+  - Type: int/poweroftwo
+  - Values: [1 : *]
   - What it is: The attention mechanism is split into multiple "heads" that perform attention calculations in parallel. Each head can learn to focus on different types of relationships in the data.
   - Size: Has no direct impact on model size, as it only determines how the head_size dimension is partitioned for parallel computation.
   - Speed: The computations for each head can be parallelized. On capable hardware, increasing the number of heads might not slow down training significantly if the head_size is kept constant.
   - Quality: Allows the model to simultaneously attend to information from different representation subspaces at different positions. This is a core concept of the Transformer and generally leads to a much better model than a single attention head.
 
 - **n_layers**
-
-  - Values: [1 : ****]
+  - Type: int/poweroftwo
+  - Values: [1 : *]
   - What it is: The number of Transformer blocks stacked on top of each other. This defines the "depth" of the model.
   - Size: Has a direct, linear impact on model size. Each layer adds a block with attention layers and network layers.
   - Speed: The impact is linear. Doubling n_layers will roughly double the training time and the number of model parameters, as the input data must pass through each block sequentially.
   - Quality: More layers allow the model to learn more complex and abstract features. Deeper models are generally more powerful, but also more prone to overfitting and can be harder to train (though residual connections help mitigate this).
 
 - **n_epochs**
-
-  - Values: [1 : ****]
+  - Type: int
+  - Values: [1 : *]
   - What it is: The number of times the training process will iterate over the entire training dataset.
   - Size: Has a direct, linear impact on model size. Each layer adds a complete set of Transformer block parameters, roughly doubling the model's core parameter count if you double the layers.
   - Speed: Directly and linearly impacts total training time. More epochs mean longer training.
   - Quality: Too few epochs will lead to an undertrained model (underfitting). Too many can lead to the model memorizing the training data (overfitting), which hurts its performance on new data. The ideal number is usually found by monitoring the validation loss.
 
 - **batch_size**
-
-  - Values: [1 : ****]
+  - Type: int/poweroftwo
+  - Values: [1 : *]
   - What it is: The number of training sequences (each of length n_ctx) processed in one forward/backward pass.
   - Size: Has no impact on the size of the model.
   - Speed: A larger batch_size allows for more parallelization, generally leading to faster training (fewer updates per epoch). However, it also requires more memory.
   - Quality: This is a trade-off. Larger batches provide a more accurate and stable gradient estimate, but the noise from smaller batches can act as a regularizer, helping the model find a better minimum and generalize better.
 
 - **r_dropout**
-
+  - Type: float
   - Values: [0.1 : 0.001]
   - What it is: A regularization technique where a fraction of neuron activations are randomly set to zero during each training step. This prevents the model from becoming too reliant on any single neuron.
   - Size: Has no impact on the size of the model.
@@ -365,7 +367,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: Crucial for improving model generalization and preventing overfitting. By forcing the network to learn redundant representations, it makes the model more robust. The value (e.g., 0.1) is the probability of a neuron being dropped.
 
 - **r_temp**
-
+  - Type: float
   - Values: [0.000001 : 1]
   - What it is: It controls the sharpness of the attention distribution. 
   - Size: Has no impact on the size of the model.
@@ -373,7 +375,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: A higher r_temp value make the distribution softer (more spread out). while lower r_temp value make the output more "peaky" (focuses more on a few positions).
 
 - **r_learn**
-
+  - Type: float
   - Values: [0.1 : 0.0001]
   - What it is: Controls how much the model's weights are adjusted with respect to the loss gradient. It determines the step size at each iteration.
   - Size: Has no impact on the size of the model.
@@ -381,6 +383,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: This is one of the most critical parameters. If it's too high, the training can become unstable and diverge. If it's too low, the model may get stuck in a suboptimal solution or take too long to train. The AdamW optimizer helps adapt the learning rate, but the initial value is still very important.
 
 - **s_warmup**
+  - Type: string/option/float
   - Values: [none, auto, 1 : 0.0001]
   - What it is: Controls how much the model's steps are contributing to the training weights based on proportional learning rate.
   - Size: Has no impact on the number of parameters in the model.
@@ -388,6 +391,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: This is one of the most critical parameters. If it's too high, the optimizer will process high number of steps until it reaches the full learning rate. If it's too low, the optimizer will process a few number of steps until it reaches the full learning rate.
 
 - **c_shuffle**
+  - Type: bool
   - Values: [false, true]
   - What it is: Controls the shuffling of data during tokenizer process for training and validation.
   - Size: Has no impact on the size of the model.
@@ -395,6 +399,7 @@ These hyperparameters collectively define the training process, where a model's 
   - Quality: This is one of the most critical parameters. If it's set to false, the validation loss could be very high due to biased split of training / validation as the last part might be systemicaly different but the reproducability and coparizon among models is easy. If it's set to true, the validation loss would be more accurate due to unbiased split of training / validation but the reproducability and coparizon among models is difficult due different batch content, a random seed might solve this issue.
 
 - **r_split**
+  - Type: float
   - Values: [0.1 : 0.9]
   - What it is: Controls the splitting of data during tokenizer process for training and validation.
   - Size: Has no impact on the size of the model.
@@ -450,13 +455,15 @@ Even our little language models have their favorite rules to follow—turns out,
 
 A language model architecture is a combination of attention and a neural network design—often based on transformers—that processes and generates human-like text by learning patterns from large-scale language data.
 
-![Architecture Diagram](material/LittleBaby.drawio.svg)
+![Architecture Diagram](material/architecture_block.drawio.svg)
+
+Block mechanism helps a GPT model process language by stacking layers that each refine the input. Within a block, the attention mechanism highlights relevant words, the feed-forward network transforms the data, and residual connections preserve context. Layer normalization keeps everything balanced, ensuring smooth learning. It’s like a well-tuned engine where each part sharpens, filters, and stabilizes the signal to generate coherent and meaningful text.
 
 ### 👁️ Attention Variants Complexity Table
 
 Attention mechanism helps a language model decide which words (or tokens) in a sentence are most relevant when generating or interpreting another word. It’s like giving the model a spotlight to focus on the most important parts of the input.
 
-![Architecture Diagram](material/LittleBaby_attention.drawio.svg)
+![Architecture Diagram](material/architecture_attention.drawio.svg)
 
 | Variant | Uses Q/K/V? | Complexity | Notes | Details |
 |--------|--------------|------------|------------|------------|
@@ -471,7 +478,7 @@ Attention mechanism helps a language model decide which words (or tokens) in a s
 
 Neural network is a system of interconnected nodes (called neurons) inspired by the human brain. In language models, these networks process text data by passing it through multiple layers, each transforming the input in increasingly abstract ways.
 
-![Architecture Diagram](material/LittleBaby_network.drawio.svg)
+![Architecture Diagram](material/architecture_network.drawio.svg)
 
 | Variant | Complexity | Notes | Details |
 |--------|------------|------------|------------|

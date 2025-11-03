@@ -73,11 +73,11 @@ def towa_file(file_path, file_mode, content):
         sys.exit(1)
 
 def remv_file(file_path):
-    try:
+    if os.path.exists(file_path):
         os.remove(file_path)
-    except FileNotFoundError:
-        print(f"File {file_path} not found.")
-        sys.exit(1)
+        print(f"File {file_path} removed successfully.")
+    else:
+        print(f"File {file_path} does not exist.")
 
 def get_directory_files(folder_path, file_prefix):
     runtime_uuids = []
