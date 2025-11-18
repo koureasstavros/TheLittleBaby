@@ -40,7 +40,7 @@ class LDA(Module):
         self.resid_dropout = Dropout(mp, r_dropout)
 
         # Normalization layer
-        self.norm = Normalization(mp, n_emb)
+        self.norm = Normalization(mp, d_type, n_emb)
 
         # KV cache for inference
         self.kv_cache = None

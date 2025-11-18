@@ -55,6 +55,7 @@
 | GPT-4.1 | l | — | 1000000 | 32768  | — | — | — | — | — | — |
 | GPT-chat | m | — | 128000 | 128000  | — | — | — | — | — | — |
 | GPT-5 | l | — | 272000 | 128000  | — | — | — | — | — | — |
+| GPT-5-codex | l | — | 272000 | 128000  | — | — | — | — | — | — |
 | o1-mini | m | — | 200000 | 100000 | — | — | — | — | — | — |
 | o1 | l | — | 200000 | 100000 | — | — | — | — | — | — |
 | o3-mini | s | — | 200000 | 100000 | — | — | — | — | — | — |
@@ -71,6 +72,8 @@
 | Claude Sonnet 3.5 | — | — | 200000 | 4096 | — | — | — | — | — | — |
 | Claude Sonnet 3.7 | — | — | 200000 | 8192 | — | — | — | — | — | — |
 | Claude Sonnet 4 | — | — | 200000 | 64000 | — | — | — | — | — | — |
+| Claude Sonnet 4.5-ga | — | — | 200000 | 64000 | — | — | — | — | — | — |
+| Claude Sonnet 4.5-preview | — | — | 1000000 | 64000 | — | — | — | — | — | — |
 
 *Do not try to relate Training Model Flops, Training Environment Training Environment Flops, Training Duration as there are other factors which are playing role, like: number of epochs, number of precision parallel efficiency, memory bandwidth, thermal limitations, etc.
 

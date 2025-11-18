@@ -11,12 +11,12 @@ class DepthwiseConv1D(Module):
     Applies a depthwise convolution over the input.
     It does use trainable parameters (weights and bias).
     """
-    def __init__(self, mp, n_channel, s_kernel=None, dtype=None):
+    def __init__(self, mp, dtype, n_channel, s_kernel=None):
         super().__init__()
         self.mp = mp
+        self.dtype = dtype
         self.n_channel = n_channel
         self.s_kernel = s_kernel
-        self.dtype = dtype
         
         # Initialize weights with small random values
         self.weight = mp.random.randn(n_channel, s_kernel) / mp.sqrt(n_channel)
