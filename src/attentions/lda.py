@@ -12,11 +12,7 @@ from src.functions.process import relu, relu_prime
 
 class LDA(Module):
     """
-    Linear Diagonal Attention:
-    - No QK^T, no cumsum
-    - Uses local depthwise convolution over V to simulate attention
-    - Complexity: O(B·T·D)
-    Params order: k_proj, v_proj, c_proj
+    Linear Diagonal Attention (LDA)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel):
         super().__init__()

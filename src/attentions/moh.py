@@ -11,10 +11,7 @@ from src.functions.process import split_heads, merge_heads, softmax, softmax_pri
 
 class MOH(Module):
     """
-    Multi-Head Attention where head outputs are mixed by a learned
-    token-wise softmax gate (treat heads as MoE experts).
-    Replaces concat+linear with weighted sum across heads + projection.
-    Params order: q_proj, k_proj, v_proj, g_proj, m_proj
+    Multi-Head Attention (MOH)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         super().__init__()

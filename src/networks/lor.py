@@ -1,5 +1,5 @@
 #########################
-# LoRA Network Module
+# Low-Rank Adaptation (LOR)
 # Author: Koureas Stavros
 #########################
 from src.module import Module
@@ -8,14 +8,7 @@ from src.layers.dropout import Dropout
 
 class LOR(Module):
     """
-    LoRA module for adapting a pretrained linear layer with low-rank matrices.
-    Formula:
-        y = W(x) + alpha / r * (B(A(x)))
-    where:
-        W is the frozen pretrained weight,
-        A and B are trainable low-rank matrices,
-        r is the rank,
-        alpha is a scaling factor.
+    Low-Rank Adaptation (LOR)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, n_out, r_dropout, rank=4, alpha=1.0):
         super().__init__()

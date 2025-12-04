@@ -9,11 +9,7 @@ from src.layers.dropout import Dropout
 
 class AFT(Module):
     """
-    Attention Free Transformer (AFT-simple, causal) in O(T·D).
-    Option A: No Q (gate=1), keep K/V projections.
-    - Training: s = cumsum(exp(K) * V) / cumsum(exp(K))
-    - Inference: running sums S, SV with sliding window up to n_ctx
-    Params order (unchanged): q_proj, k_proj, v_proj, c_proj
+    Attention Free Transformer (AFT)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip):
         super().__init__()

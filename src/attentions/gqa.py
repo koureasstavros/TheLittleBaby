@@ -11,11 +11,7 @@ from src.functions.process import split_heads, merge_heads, softmax, softmax_pri
 
 class GQA(Module):
     """
-    Grouped-Query Attention:
-    - Q uses n_heads heads (head_size = n_heads * d_k)
-    - K,V use n_kv_heads heads (n_kv_heads <= n_heads)
-    - Each KV head is shared across group_size = n_heads // n_kv_heads query heads
-    Params order: q_proj, k_proj, v_proj, c_proj
+    Grouped-Query Attention (GQA)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, n_kv_heads):
         super().__init__()

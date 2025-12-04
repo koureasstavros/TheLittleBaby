@@ -10,10 +10,7 @@ from src.functions.process import sigmoid, sigmoid_prime
 
 class GGL(Module):
     """
-    Gated Grouped Linear:
-    - Split embedding into groups
-    - Each group has its own linear + gate
-    - Merge back to full embedding
+    Gated Grouped Linear (LIN)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_groups):
         super().__init__()

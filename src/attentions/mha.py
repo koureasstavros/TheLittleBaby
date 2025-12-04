@@ -11,8 +11,7 @@ from src.functions.process import split_heads, merge_heads, softmax, softmax_pri
 
 class MHA(Module):
     """
-    Multi-Head Self-Attention mechanism.
-    Computes attention scores and combines information from different "heads".
+    Multi-Head Self-Attention mechanism (MHA)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         super().__init__()        

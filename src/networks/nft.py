@@ -10,19 +10,7 @@ from src.functions.process import sigmoid, sigmoid_prime
 
 class NFT(Module):
     """
-    Network Free Transformer (NFT-simple, causal) used as the feed-forward network.
-    Training (vectorized):
-        E  = exp(clip(K))
-        S  = cumsum(E)
-        SV = cumsum(E * V)
-        s  = SV / (S + eps)
-        y  = gate(x) * dropout(s)    # gate(x) = sigmoid(q_proj(x)) if use_gate else 1
-        out = resid_dropout(c_proj(y))
-
-    Inference (streaming):
-        Maintain running S, SV and a FIFO of last n_ctx terms to support a sliding window.
-
-    Params order preserved: q_proj, k_proj, v_proj, c_proj
+    Network Free Transformer (NFT)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate, clip):
         super().__init__()

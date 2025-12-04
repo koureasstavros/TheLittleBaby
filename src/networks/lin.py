@@ -10,10 +10,7 @@ from src.functions.process import sigmoid, sigmoid_prime
 
 class LIN(Module):
     """
-    Linear Instant Network:
-    - Single projection + optional gating
-    - Complexity: O(B·T·D)
-    Params order: c_proj
+    Linear Instant Network (LIN)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate):
         super().__init__()

@@ -10,8 +10,7 @@ from src.functions.process import gelu, gelu_prime
 
 class MLP(Module):
     """
-    Multi-Layer Perceptron block, typically used in Transformer after attention.
-    Consists of two linear layers with GELU activation and dropout.
+    Multi-Layer Perceptron (MLP)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_expansion):
         super().__init__()

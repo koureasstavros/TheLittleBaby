@@ -10,9 +10,7 @@ from src.functions.process import softmax, softmax_prime, gelu, gelu_prime
 
 class MOE(Module):
     """
-    Dense (non-sparse) Mixture-of-Experts feed-forward:
-    y = sum_e softmax(gate(x))_e * Expert_e(x)
-    Each Expert_e: Linear_up -> GELU -> Linear_down -> Dropout
+    Mixture-of-Experts (MOE)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_expansion, n_experts):
         super().__init__()

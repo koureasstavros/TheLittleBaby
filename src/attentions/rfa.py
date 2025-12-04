@@ -11,9 +11,7 @@ from src.functions.process import split_heads, merge_heads, softmax, softmax_pri
 
 class RFA(Module):
     """
-    Recurrent Focused Attention:
-    - Local sliding window attention for short-term context
-    - Recurrent memory vector per head for long-term context
+    Recurrent Focused Attention (RFA)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window):
         super().__init__()

@@ -1,5 +1,5 @@
 #########################
-# SwiGLU Network Module
+# Swish-Gated Linear (SWI)
 # Author: Koureas Stavros
 #########################
 from src.module import Module
@@ -8,8 +8,7 @@ from src.functions.process import sigmoid, sigmoid_prime
 
 class SWI(Module):
     """
-    SwiGLU: Gated MLP variant using Swish activation.
-    y = Linear1(x) * swish(Linear2(x)), then projected by Linear3.
+    Swish-Gated Linear (SWI)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb_in, n_emb_out, n_expansion):
         super().__init__()

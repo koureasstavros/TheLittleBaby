@@ -1,5 +1,5 @@
 #########################
-# Sparse Attention: Local + Global Window
+# Sparse Local + Global Attention (SGL)
 # Author: Koureas Stavros
 #########################
 
@@ -11,8 +11,7 @@ from src.functions.process import split_heads, merge_heads, softmax, softmax_pri
 
 class SparseLocalGlobalAttention(Module):
     """
-    Sparse Attention: combines local windowed attention and global tokens.
-    Supports KV cache for inference, gradient validation, and parameter management.
+    Sparse Local + Global Attention (SGL)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window, global_indices):
         super().__init__()
