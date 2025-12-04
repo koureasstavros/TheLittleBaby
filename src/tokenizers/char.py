@@ -110,3 +110,37 @@ class CharTokenizer:
         for i in range(0, N, b_size):
             batch_idx = indices[i:i+b_size]
             yield X[batch_idx], y[batch_idx]
+
+    def get_batches_lazy(self, data, n_ctx, b_size, shuffle=True):
+        """
+        Generates batches lazily without loading all data into memory.
+        Only computes each batch at runtime.
+        """
+        
+        # Total number of possible sequences
+        n_samples = len(data) - n_ctx
+        if n_samples <= 0:
+            return
+        
+        # Create indices for all possible starting positions
+        indices = self.mp.arange(n_samples)
+        if shuffle:
+            self.mp.random.shuffle(indices)
+        
+        # Convert data to array once (just the raw tokens, not expanded)
+        data_array = self.mp.array(data, dtype=self.mp.int32)
+        
+        # Yield batches computed on-the-fly
+        for i in range(0, n_samples, b_size):
+            batch_indices = indices[i:i + b_size]
+            batch_size = len(batch_indices)
+            
+            # Build X and y for this batch only
+            X_batch = self.mp.zeros((batch_size, n_ctx), dtype=self.mp.int32)
+            y_batch = self.mp.zeros((batch_size, n_ctx), dtype=self.mp.int32)
+            
+            for j, idx in enumerate(batch_indices):
+                X_batch[j] = data_array[idx:idx + n_ctx]
+                y_batch[j] = data_array[idx + 1:idx + n_ctx + 1]
+            
+            yield X_batch, y_batch

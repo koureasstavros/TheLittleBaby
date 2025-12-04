@@ -335,7 +335,8 @@ class GPT(Module):
         if prompt is None:
             ctx = self.mp.zeros((1, 1), dtype=self.mp.int32) # Initial context: a single token
         else:
-            encode_ = lambda s: self.mp.array([stoi[c] for c in s]).reshape(1, -1)
+            def encode_(s):
+                return self.mp.array([stoi[c] for c in s]).reshape(1, -1)
             prompt_ids = encode_(prompt)  # Your tokenizer should return shape (1, prompt_length)
             ctx = prompt_ids # Initial context: sequence of tokens
 
