@@ -67,7 +67,7 @@ class GLA(Module):
 
     def flops(self, batch_size, training):
         """
-        Estimate FLOPs for this LDA layer.
+        Estimate FLOPs for the GLA forward pass.
         Includes K/V projections, elementwise gating, normalization,
         depthwise convolution, and output projection.
         batch_size: number of sequences in the batch

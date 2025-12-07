@@ -23,7 +23,7 @@ class Network:
             case "lor":
                 return LOR(mp, d_type, n_ctx, n_emb, n_emb, r_dropout, rank=4, alpha=1.0)
             case "gln":
-                return GLN(mp, d_type, n_ctx, n_emb, r_dropout, use_gate=True)
+                return GLN(mp, d_type, n_ctx, n_emb, r_dropout)
             case "ggl":
                 return GGL(mp, d_type, n_ctx, n_emb, r_dropout, n_groups=4)
             case "nft":
