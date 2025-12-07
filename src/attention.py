@@ -10,6 +10,7 @@ from src.attentions.swh import SWH
 from src.attentions.aft import AFT
 from src.attentions.gla import GLA
 from src.attentions.rfa import RFA
+from src.attentions.hda import HDA
 
 class Attention:
     def __new__(cls, mp, c_attention, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
@@ -28,5 +29,7 @@ class Attention:
                 return RFA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window=8)
             case "aft":
                 return AFT(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip=20.0)
+            case "hda":
+                return HDA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)
             case _:
                 raise ValueError(f"Unknown attention type: {c_attention}")

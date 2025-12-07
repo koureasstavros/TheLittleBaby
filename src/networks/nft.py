@@ -12,17 +12,16 @@ class NFT(Module):
     """
     Network Free Transformer (NFT)
     """
-    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate, clip):
+    def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, clip):
         super().__init__()
         self.mp = mp
         self.n_ctx = n_ctx
         self.n_emb = n_emb
         self.r_dropout = r_dropout
-        self.use_gate = bool(use_gate)
         self.clip = float(clip)
 
         # Projections
-        self.q_proj = Linear(mp, d_type, n_emb, n_emb, bias=False) # used only if use_gate=True
+        self.q_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
         self.k_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
         self.v_proj = Linear(mp, d_type, n_emb, n_emb, bias=False)
         self.c_proj = Linear(mp, d_type, n_emb, n_emb, bias=True)
@@ -63,9 +62,8 @@ class NFT(Module):
 
         flops = 0
 
-        # q_proj only if gating is used
-        if self.use_gate:
-            flops += linear_flops(self.n_emb, self.n_emb)
+        # q_proj gating
+        flops += linear_flops(self.n_emb, self.n_emb)
 
         # k_proj and v_proj
         flops += linear_flops(self.n_emb, self.n_emb)  # k_proj
@@ -81,9 +79,8 @@ class NFT(Module):
         # division for s = SV / (S + eps)
         flops += batch_size * self.n_ctx * self.n_emb
 
-        # gating multiply if used
-        if self.use_gate:
-            flops += batch_size * self.n_ctx * self.n_emb
+        # gating multiply
+        flops += batch_size * self.n_ctx * self.n_emb
 
         # c_proj
         flops += linear_flops(self.n_emb, self.n_emb)
@@ -115,12 +112,9 @@ class NFT(Module):
         B, T, D = x.shape
 
         # 1. Projections
-        if self.use_gate:
-            q_lin = self.q_proj.forward(x)          # (B,T,D)
-            gate = sigmoid(self.mp, q_lin)          # (B,T,D)
-        else:
-            q_lin = None
-            gate = 1.0
+        q_lin = self.q_proj.forward(x)          # (B,T,D)
+        gate = sigmoid(self.mp, q_lin)          # (B,T,D)
+
 
         k_lin = self.k_proj.forward(x)      # (B,T,D)
         v_lin = self.v_proj.forward(x)      # (B,T,D)
@@ -162,11 +156,8 @@ class NFT(Module):
                 SV += ev_t
 
                 s_t = SV / (S + eps)                    # (B,D)
-                if self.use_gate:
-                    g_t = gate[:, t, :]
-                    y_t = g_t * s_t
-                else:
-                    y_t = s_t
+                g_t = gate[:, t, :]
+                y_t = g_t * s_t
 
                 y_list.append(y_t[:, None, :])
 
@@ -192,10 +183,7 @@ class NFT(Module):
         s_d = self.attn_dropout.forward(s)
 
         # 6. Apply gating
-        if self.use_gate:
-            y = gate * s_d
-        else:
-            y = s_d
+        y = gate * s_d
 
         # 7. Final Projection
         out = self.c_proj.forward(y)
@@ -224,15 +212,12 @@ class NFT(Module):
         # 3. Backward through final projection
         grad_y, c_grads = self.c_proj.backward(grad_c_in)        # (B,T,D)
 
-        # 4. Split path: y = gate * s_d (gate=1 if disabled)
-        if self.use_gate:
-            grad_gate = grad_y * s_d                      # (B,T,D)
-            grad_s_d = grad_y * gate                      # (B,T,D)
-            sig = gate
-            grad_q_lin = grad_gate * sigmoid_prime(self.mp, sig)    # (B,T,D)
-        else:
-            grad_s_d = grad_y
-            grad_q_lin = self.mp.zeros_like(grad_y)
+        # 4. Split path: y = gate * s_d
+        grad_gate = grad_y * s_d                                 # (B,T,D)
+        grad_s_d = grad_y * gate                                 # (B,T,D)
+        sig = gate
+        grad_q_lin = grad_gate * sigmoid_prime(self.mp, sig)     # (B,T,D)
+
 
         # 5. Backward through dropout on s
         grad_s, _ = self.attn_dropout.backward(grad_s_d)  # (B,T,D)
@@ -255,18 +240,12 @@ class NFT(Module):
         grad_k_lin = self.backward_exp_clip(grad_E, k_lin)   # (B,T,D)
 
         # 9 Back through projections
+        grad_x_q, q_grads = self.q_proj.backward(grad_q_lin)
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)
-        grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)
-
-        if self.use_gate:
-            grad_x_q, q_grads = self.q_proj.backward(grad_q_lin)
-        else:
-            # Keep parameter order; produce zero grads for q
-            q_grads = [self.mp.zeros_like(self.q_proj.weight)]
-            grad_x_q = self.mp.zeros_like(grad_x_k)
+        grad_x_v, v_grads = self.v_proj.backward(grad_V_lin)        
 
         # Assemble grad
-        grad_x = grad_x_k + grad_x_v + grad_x_q
+        grad_x =  grad_x_q + grad_x_k + grad_x_v
 
         # Assemble grads in order: q, k, v, c
         param_grads = []
