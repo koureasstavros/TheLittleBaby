@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.17
+version: v0.1.18
 ---
 
 # 👶 The Little Baby
@@ -468,11 +468,12 @@ Attention mechanism helps a language model decide which words (or tokens) in a s
 | Variant | Uses Q/K/V? | Complexity | Notes | Details |
 |--------|--------------|------------|------------|------------|
 | **MHA** (Multi-Head Attention) | Separate Q, K, V per head | **O(B·T²·H·d_k)** | Standard Transformer attention; expensive for long sequences | Standard full multi‑head attention. |
-| **MOH** (Multi-Output Head) | Typically uses Q/K/V | **O(B·T²·H·d_k)** | Less common; focuses on output diversity rather than input projection | Full QKᵀ for all heads + softmax gating over heads. |
+| **MOH** (Mixture-of-Heads Attention) | Separate Q, K, V per head + gating | **O(B·T²·H·d_k)** | Soft mixture over all head outputs | Full QKᵀ for all heads + softmax gating over heads to produce weighted mixture. |
 | **GQA** (Grouped-Query Attention) | Shared K/V per group of Q heads | **O(B·T²·Hkv·d_k) with Hkv < Hq** | Trade-off between performance and efficiency | Full QKᵀ but with fewer K/V heads (shared across Q groups). |
-| **SWH** (Sliding Window Attention) | Uses Q/K/V within local window | **O(B·T²·H·d_k)** | Limits attention to nearby tokens; efficient for long sequences | Full QKᵀ per head but only one head output is used per token (top‑1 gating). Still computes all heads. |
-| **AFT** (Attention-Free Transformer) | No K/V; uses learned positional bias | **O(B·T·D)** | Removes attention entirely; uses element-wise operations and bias terms | Only k_proj, v_proj, elementwise exp/clip, cumsum, division, c_proj. No QKᵀ. |
-| **LDA** (Linear Diagonal Attention) | Shared Q/K; diagonal-only interaction | **O(B·T·D)** | Lightweight attention using only diagonal of QKᵀ; fast and memory-efficient | Computes only Qᵢ·Kᵢ for each token *i* (no pairwise attention); often gated with sigmoid or swish. |
+| **SWH** (Switch-Head Attention) | Separate Q, K, V per head + gating | **O(B·T²·H·d_k)** | Hard top-1 head routing per token; straight-through gradient | Full QKᵀ per head but only one head output is used per token (top‑1 gating via argmax). Still computes all heads. |
+| **GLA** (Gated Linear Attention) | K/V projections only; no Q | **O(B·T·D)** | Lightweight attention-free mechanism; fast and memory-efficient | Only k_proj, v_proj, elementwise gating (K·V), depthwise conv, ReLU, normalization, c_proj. No QKᵀ. |
+| **RFA** (Recurrent Focused Attention) | Separate Q, K, V per head + recurrent memory | **O(B·T·W·H·d_k)** | Sliding window attention with recurrent memory; efficient for long sequences | Full QKᵀ within local window (s_window), recurrent memory updated per step, causal masking, KV cache support. |
+| **AFT** (Attention-Free Transformer) | K/V projections only; no Q used | **O(B·T·D)** | Removes attention entirely; uses element-wise operations | Only k_proj, v_proj, elementwise exp/clip, cumsum, division, c_proj. No QKᵀ. |
 
 ### 🕸️ Network Variants Complexity Table
 
@@ -483,11 +484,12 @@ Neural network is a system of interconnected nodes (called neurons) inspired by 
 | Variant | Complexity | Notes | Details |
 |--------|------------|------------|------------|
 | **MLP** (Multilayer Perceptron) | **O(N × D²)** | Dense feedforward layer; all inputs pass through the same network | 1 large expansion projection + 1 down projection + GELU + dropout. |
-| **MOE** (Mixture of Experts) | **O(K × D²)** (K ≪ N) | Sparse routing to K of N experts; improves parameter-to-compute ratio and scalability | Gating projection + all experts computed every time (dense MOE) → many large projections per forward. |
-| **LOR** (Low-Rank Adaptation) | **O(N × rD)** where *r* ≪ *D* | Efficient fine-tuning by injecting low-rank matrices into frozen weights | 1 frozen full projection + 2 small low-rank projections (rank ≪ D) + dropout. |
-| **SWI** (Shifted Window Interaction) | **O(N·w)** where *w* is window size | Local windowed processing with shifted regions; avoids global attention | 2 full projections up to expanded dim + 1 down projection, with swish gating. |
-| **NFT** (Network Free Transformer) | **O(N × D)** | Attention-free mechanism that converts features into discrete tokens; useful for structured or multimodal data | 3–4 linear projections (q_proj optional) + elementwise ops + cumsum (O(B·T·D)), no QKᵀ, no expansion. |
-| **LIN** (Linear Instant Network) | **O(N × D)** | Lightweight feedforward alternative; fast and interpretable | 1 linear projection + 1 gating projection (sigmoid or swish) + elementwise product; no expansion, no dropout. |
+| **MOE** (Mixture of Experts) | **O(E × D²)** where *E* = experts | Dense routing to all E experts; improves parameter capacity while sharing gating | Gating projection (softmax) + E experts each with expansion projection + GELU + down projection + dropout. |
+| **LOR** (Low-Rank Adaptation) | **O(N × rD)** where *r* ≪ *D* | Efficient fine-tuning by injecting low-rank matrices into frozen weights | 1 frozen full projection (with bias) + 2 small low-rank projections (no bias, rank ≪ D) + scaling + dropout. |
+| **SWI** (Swish-Gated Linear Unit) | **O(N × D²)** | SwiGLU feedforward variant; uses swish gating for improved gradient flow | 2 full projections to expanded dim (up + gate) + swish activation (x·σ(x)) + 1 down projection; no dropout. |
+| **GLN** (Gated Linear Network) | **O(N × D)** | Lightweight feedforward alternative; fast and interpretable | 1 linear projection + 1 optional gating projection (sigmoid) + elementwise product; no expansion + dropout. |
+| **GGL** (Balanced Gated Grouped Linear) | **O(N × D)** | Grouped linear with channel shuffle for cross-group communication; balances efficiency and expressiveness | G linear projections + G gating projections (sigmoid) per group (group_dim = D/G) + channel shuffle + dropout. |
+| **NFT** (Network Free Transformer) | **O(N × D)** | Attention-free mechanism using cumulative sums; efficient linear complexity | 3–4 linear projections (q_proj optional for sigmoid gating) + exp/clip + cumsum + 2 dropout layers; no QKᵀ, no expansion. |
 
 ## 🗄️ Data Sets (TEXT)
 

@@ -1,5 +1,5 @@
 #########################
-# Linear Instant Network (LIN)
+# Gated Linear Network (GLN)
 # Author: Koureas Stavros
 #########################
 
@@ -8,9 +8,9 @@ from src.layers.linear import Linear
 from src.layers.dropout import Dropout
 from src.functions.process import sigmoid, sigmoid_prime
 
-class LIN(Module):
+class GLN(Module):
     """
-    Linear Instant Network (LIN)
+    Gated Linear Network (GLN)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, use_gate):
         super().__init__()
@@ -122,19 +122,19 @@ class LIN(Module):
         return grad_x, param_grads
 
     def from_dict(self, weights_dict, i):
-        self.c_proj.weight = weights_dict[f'block_{i}_lin_c_weight']
-        self.c_proj.bias = weights_dict[f'block_{i}_lin_c_bias']
+        self.c_proj.weight = weights_dict[f'block_{i}_gln_c_weight']
+        self.c_proj.bias = weights_dict[f'block_{i}_gln_c_bias']
         if self.use_gate:
-            self.g_proj.weight = weights_dict[f'block_{i}_lin_g_weight']
-            self.g_proj.bias = weights_dict[f'block_{i}_lin_g_bias']
+            self.g_proj.weight = weights_dict[f'block_{i}_gln_g_weight']
+            self.g_proj.bias = weights_dict[f'block_{i}_gln_g_bias']
 
         self.c_proj.synchronize()        
         if self.use_gate:
             self.g_proj.synchronize()
 
     def towa_dict(self, weights_dict, i):
-        weights_dict[f'block_{i}_lin_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_lin_c_bias'] = self.c_proj.bias
+        weights_dict[f'block_{i}_gln_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_gln_c_bias'] = self.c_proj.bias
         if self.use_gate:
-            weights_dict[f'block_{i}_lin_g_weight'] = self.g_proj.weight
-            weights_dict[f'block_{i}_lin_g_bias'] = self.g_proj.bias
+            weights_dict[f'block_{i}_gln_g_weight'] = self.g_proj.weight
+            weights_dict[f'block_{i}_gln_g_bias'] = self.g_proj.bias

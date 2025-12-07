@@ -26,8 +26,10 @@ def relu_prime(mp, x):
     return (x > 0).astype(x.dtype)
 
 def sigmoid(mp, x):
-    """Compute the sigmoid activation function."""
-    return 1 / (1 + mp.exp(-x))
+    """Compute the sigmoid activation function with numerical stability."""
+    # Clamp input to prevent overflow in exp()
+    x_clamped = mp.clip(x, -88, 88)  # exp(-88) ≈ 0, exp(88) is max safe for float32
+    return 1 / (1 + mp.exp(-x_clamped))
 
 def sigmoid_prime(mp, s):
     """Derivative of the sigmoid function."""
@@ -66,7 +68,6 @@ def cosine_similarity_prime(mp, grad_out, a, b, eps=1e-8):
     a_norm = mp.sqrt(mp.sum(a * a, axis=-1, keepdims=True) + eps)
     b_norm = mp.sqrt(mp.sum(b * b, axis=-1, keepdims=True) + eps)
     dot = mp.sum(a * b, axis=-1, keepdims=True)
-    sim = dot / (a_norm * b_norm)
 
     grad_dot = grad_out / (a_norm * b_norm)
     grad_a_norm = - (dot / (a_norm**3 * b_norm)) * grad_out

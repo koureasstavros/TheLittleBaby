@@ -10,7 +10,7 @@ from src.functions.process import sigmoid, sigmoid_prime
 
 class GGL(Module):
     """
-    Gated Grouped Linear (LIN)
+    Gated Grouped Linear (GGL)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, n_groups):
         super().__init__()

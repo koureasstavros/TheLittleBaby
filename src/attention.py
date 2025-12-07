@@ -8,7 +8,7 @@ from src.attentions.moh import MOH
 from src.attentions.gqa import GQA
 from src.attentions.swh import SWH
 from src.attentions.aft import AFT
-from src.attentions.lda import LDA
+from src.attentions.gla import GLA
 from src.attentions.rfa import RFA
 
 class Attention:
@@ -22,11 +22,11 @@ class Attention:
                 return GQA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, n_kv_heads=None)
             case "swh":
                 return SWH(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)
-            case "aft":
-                return AFT(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip=20.0)
-            case "lda":
-                return LDA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel=8)
+            case "gla":
+                return GLA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel=8)
             case "rfa":
                 return RFA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads, s_window=8)
+            case "aft":
+                return AFT(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, r_clip=20.0)
             case _:
                 raise ValueError(f"Unknown attention type: {c_attention}")

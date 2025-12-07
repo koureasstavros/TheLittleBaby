@@ -1,5 +1,5 @@
 #########################
-# Linear Diagonal Attention (LDA)
+# Gated Linear Attention (GLA)
 # Author: Koureas Stavros
 #########################
 
@@ -10,9 +10,9 @@ from src.layers.normalization import Normalization
 from src.layers.convolution import DepthwiseConv1D
 from src.functions.process import relu, relu_prime
 
-class LDA(Module):
+class GLA(Module):
     """
-    Linear Diagonal Attention (LDA)
+    Gated Linear Attention (GLA)
     """
     def __init__(self, mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_kernel):
         super().__init__()
@@ -203,27 +203,27 @@ class LDA(Module):
         return grad_x, param_grads
     
     def from_dict(self, weights_dict, i):
-        self.s_kernel = int(weights_dict[f'block_{i}_lda_kernel_size'])
-        self.k_proj.weight = weights_dict[f'block_{i}_lda_k_weight']
-        self.v_proj.weight = weights_dict[f'block_{i}_lda_v_weight']
-        self.c_proj.weight = weights_dict[f'block_{i}_lda_c_weight']
-        self.c_proj.bias = weights_dict[f'block_{i}_lda_c_bias']
-        self.depthwise_conv.weight = weights_dict[f'block_{i}_lda_conv_weight']
-        self.depthwise_conv.bias = weights_dict[f'block_{i}_lda_conv_bias']
-        self.norm.gamma = weights_dict[f'block_{i}_lda_norm_gamma']
-        self.norm.beta = weights_dict[f'block_{i}_lda_norm_beta']
+        self.s_kernel = int(weights_dict[f'block_{i}_gla_kernel_size'])
+        self.k_proj.weight = weights_dict[f'block_{i}_gla_k_weight']
+        self.v_proj.weight = weights_dict[f'block_{i}_gla_v_weight']
+        self.c_proj.weight = weights_dict[f'block_{i}_gla_c_weight']
+        self.c_proj.bias = weights_dict[f'block_{i}_gla_c_bias']
+        self.depthwise_conv.weight = weights_dict[f'block_{i}_gla_conv_weight']
+        self.depthwise_conv.bias = weights_dict[f'block_{i}_gla_conv_bias']
+        self.norm.gamma = weights_dict[f'block_{i}_gla_norm_gamma']
+        self.norm.beta = weights_dict[f'block_{i}_gla_norm_beta']
 
         self.k_proj.synchronize()
         self.v_proj.synchronize()
         self.c_proj.synchronize()
 
     def towa_dict(self, weights_dict, i):
-        weights_dict[f'block_{i}_lda_kernel_size'] = self.s_kernel
-        weights_dict[f'block_{i}_lda_k_weight'] = self.k_proj.weight
-        weights_dict[f'block_{i}_lda_v_weight'] = self.v_proj.weight
-        weights_dict[f'block_{i}_lda_c_weight'] = self.c_proj.weight
-        weights_dict[f'block_{i}_lda_c_bias'] = self.c_proj.bias
-        weights_dict[f'block_{i}_lda_conv_weight'] = self.depthwise_conv.weight
-        weights_dict[f'block_{i}_lda_conv_bias'] = self.depthwise_conv.bias
-        weights_dict[f'block_{i}_lda_norm_gamma'] = self.norm.gamma
-        weights_dict[f'block_{i}_lda_norm_beta'] = self.norm.beta
+        weights_dict[f'block_{i}_gla_kernel_size'] = self.s_kernel
+        weights_dict[f'block_{i}_gla_k_weight'] = self.k_proj.weight
+        weights_dict[f'block_{i}_gla_v_weight'] = self.v_proj.weight
+        weights_dict[f'block_{i}_gla_c_weight'] = self.c_proj.weight
+        weights_dict[f'block_{i}_gla_c_bias'] = self.c_proj.bias
+        weights_dict[f'block_{i}_gla_conv_weight'] = self.depthwise_conv.weight
+        weights_dict[f'block_{i}_gla_conv_bias'] = self.depthwise_conv.bias
+        weights_dict[f'block_{i}_gla_norm_gamma'] = self.norm.gamma
+        weights_dict[f'block_{i}_gla_norm_beta'] = self.norm.beta

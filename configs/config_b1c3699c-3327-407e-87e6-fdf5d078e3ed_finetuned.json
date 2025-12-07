@@ -6,7 +6,7 @@
     "c_device_gpu_tensor": "0",
     "c_tokenizer": "char",
     "c_sequence": "pre",
-    "c_attention": "lda",
+    "c_attention": "gla",
     "c_network": "ggl",
     "c_optimizer": "adamw",
     "d_type": "fp32",

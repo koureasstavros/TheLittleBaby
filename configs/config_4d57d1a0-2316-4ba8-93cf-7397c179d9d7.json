@@ -7,7 +7,7 @@
     "c_tokenizer": "char",
     "c_sequence": "pre",
     "c_attention": "swh",
-    "c_network": "lin",
+    "c_network": "gln",
     "c_optimizer": "adamw",
     "d_type": "fp32",
     "n_ctx": 128,
