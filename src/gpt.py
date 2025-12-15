@@ -616,7 +616,8 @@ class GPT(Module):
                     optimizer.set_r_learn(r_learn, train_batch_cnt, train_batch_all, s_warmup)
                     # Compute loss and gradients
                     loss, grads = value_and_grad(self, X_batch, y_batch, train_cache)
-                    monitor.analyze(grads)  # Analyze gradients for vanishing/exploding issues
+                    grad_result = monitor.analyze(grads)
+                    print(f"Gradient Monitor | global_norm: {grad_result['global_norm']:.4e} | vanishing: {grad_result['has_vanishing']} | exploding: {grad_result['has_exploding']}")
                     # Update model parameters using the optimizer
                     optimizer.step(grads)
                     running_train_loss += loss
