@@ -4,7 +4,7 @@ tags: ["ai", "language", "model", "llm", "slm", "train", "inference", "extract",
 datasets: ["shakespeare"]
 license: "apache-2.0"
 base_model: "gpt"
-version: v0.1.21
+version: v0.1.22
 ---
 
 # 👶 The Little Baby
@@ -122,9 +122,9 @@ As long as:
 The Little Baby owes its lineage to two brilliant minds in the AI family tree:
 
 - 👑 **Ownser**: Koureas Stavros | Product Architect BI / AI — lovingly crafted and cared
-- 🧔 **Father**: OpenAI GPT 4.1 — provider of deep generative DNA and thoughtful token flow  
-- 🧑‍🍼 **Mother**: Google Gemini 2.5 — donor of wide context windows and clever architectural chromosomes
-- 🧙 **Godparent**: Claude Sonnet 4.0 — gentle guide and lifelong companion, whispering wisdom and weaving clarity
+- 🧔 **Father**: OpenAI GPT — provider of deep generative DNA and thoughtful token flow  
+- 🧑‍🍼 **Mother**: Google Gemini — donor of wide context windows and clever architectural chromosomes
+- 🧙 **Godparent**: Claude Sonnet — gentle guide and lifelong companion, whispering wisdom and weaving clarity
 
 Together, they gifted the foundational strands that allowed this little one to generate helpful code and take its first linguistic steps.
 

@@ -120,6 +120,15 @@ This section breaks down complex ideas into clear, digestible insights. It offer
 
 Here, the gradient of y with respect to x is dy/dx = 2x + 3, so at x = 2, the gradient is 7. That’s what gets stored in x.grad.
 
+🌈 ## Gradient Problem
+
+The gradient problem in backpropagation can manifest as either vanishing or exploding gradients. Common causes include:
+
+- Inappropriate activation functions, where derivatives become excessively large or extremely small, use ReLu/LeakyReLU
+- Poor weight initialization, leading to unstable training dynamics, use Xavier/He
+- Overly deep networks, which amplify gradient issues across many layers, use Residual connections
+- Learning rates that are too high or too low, disrupting convergence, use Adam optimizer
+- Absence of normalization techniques, such as batch normalization, to stabilize training, use BatchNorm or LayerNorm
 
 ## 🧾 References
 

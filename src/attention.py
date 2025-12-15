@@ -13,7 +13,7 @@ from src.attentions.rfa import RFA
 from src.attentions.hda import HDA
 
 class Attention:
-    def __new__(cls, mp, c_attention, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
+    def __new__(cls, mp, n_layers, i_layer, c_attention, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads):
         match c_attention:
             case "mha":
                 return MHA(mp, d_type, n_ctx, n_emb, r_dropout, r_temp, s_head, n_heads)

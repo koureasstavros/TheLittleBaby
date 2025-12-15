@@ -26,9 +26,14 @@ class AdamW:
         """
         Performs a single optimization step (parameter update).
         grads: a list of gradients, corresponding to self.params.
+
+        Returns:
+            List of gradients (unmodified) for monitoring purposes
         """
         self.t += 1 # Increment timestep
+        processed_grads = []
         for p, g in zip(self.params, grads):
+            processed_grads.append(g)
             pid = id(p) # Use object ID for unique parameter identification
 
             # Skip weight decay for 1D params (biases, LayerNorm gamma/beta)
@@ -49,6 +54,8 @@ class AdamW:
 
             # Update parameters with bias-corrected estimates - gradient descent
             p -= self.lr * m_hat / (self.mp.sqrt(v_hat) + self.eps)
+
+        return processed_grads
 
     def set_r_learn(self, r_learn, c_step=None, a_step=None, s_warmup=None):
         if s_warmup == "none":

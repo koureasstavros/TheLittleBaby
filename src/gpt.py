@@ -13,6 +13,7 @@ from src.optimizer import Optimizer
 from src.layers.linear import Linear
 from src.layers.embedding import Embedding
 from src.layers.normalization import Normalization
+from src.utils.gradient_monitor import GradientMonitor
 from src.functions.runtime import is_debug, pt_debug
 from src.functions.helper import load_package, get_cpu_properties, get_gpu_properties
 from src.functions.process import softmax, value_and_grad, value_and_nograd
@@ -136,14 +137,18 @@ class GPT(Module):
 
         # Model components
         self.vocab_size = 1 # Placeholder for vocabulary size, should updated
-        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)     # Tokenizer
+        self.tokenizer = Tokenizer(self.mp, self.c_tokenizer)                                                # Tokenizer
         self.wte = Embedding(self.mp, self.d_type, self.vocab_size, self.n_emb)                              # Token embeddings
         self.wpe = Embedding(self.mp, self.d_type, self.n_ctx, self.n_emb)                                   # Positional embeddings
-        self.blocks = [Block(self.mp, self.c_sequence, self.c_attention, self.c_network, self.d_type, self.n_emb, self.n_ctx, self.r_dropout, self.r_temp, self.s_head, self.n_heads)
-                    for _ in range(self.n_layers)]                                              # Stack of tokenizer blocks
+        self.blocks = [Block(self.mp, self.n_layers, i_layer,
+                             self.c_sequence, self.c_attention, self.c_network,
+                             self.d_type, self.n_emb, self.n_ctx,
+                             self.r_dropout, self.r_temp,
+                             self.s_head, self.n_heads)
+                             for i_layer in range(self.n_layers)]                                            # Stack of tokenizer blocks
         self.ln_f = Normalization(self.mp, self.d_type, self.n_emb)                                          # Final Layer Normalization
         self.lm_head = Linear(self.mp, self.d_type, self.n_emb, self.vocab_size, bias=True)                  # Language modeling head (output logits)
-        
+
     def parameters(self):
         """Returns all parameters of the GPT model."""
         params = []
@@ -156,9 +161,7 @@ class GPT(Module):
         return params
 
     def flops(self, batch_size, training):
-        """
-        Estimate total FLOPs for the GPT model forward (and backward if training=True).
-        """
+        """Returns total FLOPs for the GPT model forward (and backward if training=True)."""
         flops = 0
 
         # Embedding lookups (approximate as 0 FLOPs or 1 multiply-add per element)
@@ -564,7 +567,6 @@ class GPT(Module):
 
         # Save the tokenizer to JSON
         self.tokenizer_dict = tokenizer_dict
-        
         X_train, y_train = self.tokenizer.prepare_data(train_data, self.n_ctx)
         X_val, y_val = self.tokenizer.prepare_data(val_data, self.n_ctx)
 
@@ -577,8 +579,9 @@ class GPT(Module):
         params = self.parameters() 
     
         # Initialize the optimizer
-        optimizer = Optimizer(self.mp, self.c_optimizer, params, r_learn)
-
+        optimizer = Optimizer(self.mp, self.c_optimizer, params, r_learn)             # Optimizer
+        monitor = GradientMonitor(self.mp, params)                                    # Monitor
+        
         batch_logs = []
         epoch_logs = []
         train_batch_total_cnt = 0
@@ -600,8 +603,8 @@ class GPT(Module):
             train_batch_cnt = 0
             train_batch_all = 0
 
-            train_batches = list(self.tokenizer.get_batches(X_train, y_train, s_batch, shuffle=True))
-            train_batch_all = len(train_batches)
+            train_batch_all = int(self.mp.ceil(X_train.shape[0] / s_batch)) if X_train.shape[0] > 0 else 0
+            train_batches = self.tokenizer.get_batches(X_train, y_train, s_batch, shuffle=True)
             if not train_batches:
                 print(f"Epoch {epoch+1}/{n_epochs} | No training data batches available. Skipping training for this epoch.")
                 avg_train_loss = float('nan')
@@ -613,6 +616,7 @@ class GPT(Module):
                     optimizer.set_r_learn(r_learn, train_batch_cnt, train_batch_all, s_warmup)
                     # Compute loss and gradients
                     loss, grads = value_and_grad(self, X_batch, y_batch, train_cache)
+                    monitor.analyze(grads)  # Analyze gradients for vanishing/exploding issues
                     # Update model parameters using the optimizer
                     optimizer.step(grads)
                     running_train_loss += loss
@@ -634,8 +638,8 @@ class GPT(Module):
             val_batch_cnt = 0
             val_batch_all = 0
 
-            val_batches = list(self.tokenizer.get_batches(X_val, y_val, s_batch, shuffle=False))
-            val_batch_all = len(val_batches)
+            val_batch_all = int(self.mp.ceil(X_val.shape[0] / s_batch)) if X_val.shape[0] > 0 else 0
+            val_batches = self.tokenizer.get_batches(X_val, y_val, s_batch, shuffle=False)
             if not val_batches:
                 print(f"Epoch {(epoch+1)}/{n_epochs} | No validation data batches available. Skipping validation for this epoch.")
                 avg_val_loss = float('nan') # Indicate no validation was performed

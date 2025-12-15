@@ -13,7 +13,7 @@ from src.networks.nft import NFT
 from src.networks.sms import SMS  
 
 class Network:
-    def __new__(cls, mp, c_network, d_type, n_ctx, n_emb, r_dropout):
+    def __new__(cls, mp, n_layers, i_layer, c_network, d_type, n_ctx, n_emb, r_dropout):
         match c_network:
             case "mlp":
                 return MLP(mp, d_type, n_ctx, n_emb, r_dropout, n_expansion=4)
