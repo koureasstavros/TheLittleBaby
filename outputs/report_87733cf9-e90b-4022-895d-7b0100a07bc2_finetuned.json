@@ -1,14 +1,14 @@
 {
     "n_epochs": 1,
     "dataset": "sophocles",
-    "avg_train_time_per_batch": 0.459246261799523,
+    "avg_train_time_per_batch": 0.45924636209813874,
     "train_batches_per_epoch": 15957,
-    "avg_val_time_per_batch": 0.18081412458473803,
+    "avg_val_time_per_batch": 0.10267083805209513,
     "val_batches_per_epoch": 1766,
     "average_train_loss_per_epoch": 1.5098881721496582,
     "average_val_loss_per_epoch": 1.6630417108535767,
-    "average_time_per_epoch": 7657.782616138458,
-    "total_time": 7657.782616138458,
+    "average_time_per_epoch": 7519.782616138458,
+    "total_time": 7519.782616138458,
     "train_cache": false,
     "batch_logs": [
         "Epoch 1/1 | Batch 1/15957 | train_loss = 1.6519 | execution_time = 1.3878",
@@ -16943,7 +16943,7 @@
         "Epoch 1/1 | Batch 973/1766 | val_loss = 1.4249 | execution_time = 0.1008",
         "Epoch 1/1 | Batch 974/1766 | val_loss = 1.5066 | execution_time = 0.1023",
         "Epoch 1/1 | Batch 975/1766 | val_loss = 1.6667 | execution_time = 0.0998",
-        "Epoch 1/1 | Batch 976/1766 | val_loss = 1.6022 | execution_time = 138.1111",
+        "Epoch 1/1 | Batch 976/1766 | val_loss = 1.6022 | execution_time = 0.1111",
         "Epoch 1/1 | Batch 977/1766 | val_loss = 1.4889 | execution_time = 0.4543",
         "Epoch 1/1 | Batch 978/1766 | val_loss = 1.5213 | execution_time = 0.1090",
         "Epoch 1/1 | Batch 979/1766 | val_loss = 1.6416 | execution_time = 0.1002",
@@ -17736,6 +17736,6 @@
         "Epoch 1/1 | Batch 1766/1766 | val_loss = 1.7866 | execution_time = 0.0957"
     ],
     "epoch_logs": [
-        "Epoch 1/1 | train_loss = 1.5099 | val_loss = 1.6630 | execution_time = 7657.7826"
+        "Epoch 1/1 | train_loss = 1.5099 | val_loss = 1.6630 | execution_time = 7519.7826"
     ]
 }
