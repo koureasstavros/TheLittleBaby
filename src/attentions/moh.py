@@ -229,7 +229,7 @@ class MOH(Module):
         grad_o_perm = grad_y[:, :, None, :] * gate_probs[..., None]  # (B,T_q,H,d_k)
         grad_g_proj_probs = self.mp.sum(grad_y[:, :, None, :] * o_perm, axis=-1)  # (B,T_q,H)
         sum_gp = self.mp.sum(grad_g_proj_probs * gate_probs, axis=-1, keepdims=True)  # (B,T_q,1)
-        grad_g_proj_logits = gate_probs * (grad_g_proj_probs - sum_gp)  # (B,T_q,H)
+        grad_g_proj_logits = gate_probs * (grad_g_proj_probs - sum_gp) / self.r_temp  # (B,T_q,H)
 
         # 6. Backward through gating projection
         grad_x_g_proj, g_proj_grads = self.g_proj.backward(grad_g_proj_logits)
@@ -249,7 +249,7 @@ class MOH(Module):
         grad_scores = grad_masked_scores
 
         # 11. Backward through scaled dot-product attention
-        scale = 1.0 / mt.sqrt(d_k)
+        scale = 1.0 / (mt.sqrt(d_k) * self.r_temp)
         # grad_Q: (B,H,T_q,d_k)
         # grad_K: (B,H,T_total,d_k) but in no-cache T_total = T_q
         grad_Q = self.mp.matmul(grad_scores, K_new) * scale

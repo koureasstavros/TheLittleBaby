@@ -240,7 +240,7 @@ class SWH(Module):
 
         # 5. Backward through softmax on gate logits (straight-through: use soft probs in Jacobian)
         sum_gp = self.mp.sum(grad_g_proj_probs * gate_probs_soft, axis=-1, keepdims=True)
-        grad_g_proj_logits = gate_probs_soft * (grad_g_proj_probs - sum_gp)  # (B,T_q,H)
+        grad_g_proj_logits = gate_probs_soft * (grad_g_proj_probs - sum_gp) / self.r_temp  # (B,T_q,H)
 
         # 6. Backward through g_proj
         grad_x_g_proj, g_proj_grads = self.g_proj.backward(grad_g_proj_logits)
@@ -260,7 +260,7 @@ class SWH(Module):
         grad_scores = grad_masked_scores
 
         # 11. scores = (Q K^T)/sqrt(d_k)
-        scale = 1.0 / mt.sqrt(self.d_k)
+        scale = 1.0 / (mt.sqrt(self.d_k) * self.r_temp)
         grad_Q = self.mp.matmul(grad_scores, K_new) * scale
         grad_K_new = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) * scale
 

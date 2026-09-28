@@ -267,7 +267,7 @@ class GQA(Module):
 
         # 9. Backward through gradients of attention
         K_rep = self.mp.repeat(K_new, repeats=group_size, axis=1)
-        scale = 1.0 / mt.sqrt(self.d_k)
+        scale = 1.0 / (mt.sqrt(self.d_k) * self.r_temp)
         grad_Q = self.mp.matmul(grad_scores, K_rep) * scale                              # (B,Hq,T_q,d_k)
         grad_K_rep = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) * scale        # (B,Hq,*,d_k)
 

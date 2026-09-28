@@ -143,7 +143,7 @@ class AFT(Module):
             eps = 1e-9
             y_list = []
             for t in range(T):
-                k_t = k_lin[:, t, :]
+                k_t = k_lin[:, t, :] / self.r_temp
                 v_t = v_lin[:, t, :]
                 e_t = self.forward_exp_clip(k_t)
                 ev_t = e_t * v_t
@@ -247,8 +247,9 @@ class AFT(Module):
         G_S = self.backward_cumsum(grad_S)     # grads wrt E
         grad_E = grad_E_fromSV + G_S
 
-        # 10. Backward through E = exp(k_lin) -> grad_k_lin = grad_E * E
-        grad_k_lin = self.backward_exp_clip(grad_E, k_lin)
+        # 10. Backward through E = exp(k_lin / temperature).
+        k_lin_scaled = k_lin / self.r_temp
+        grad_k_lin = self.backward_exp_clip(grad_E, k_lin_scaled) / self.r_temp
 
         # 11. Backward through k_proj, v_proj (no q_proj path)
         grad_x_k, k_grads = self.k_proj.backward(grad_k_lin)

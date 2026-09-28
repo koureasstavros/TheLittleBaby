@@ -33,8 +33,8 @@ class DepthwiseConv1D(Module):
     def forward(self, x):
         x = x.astype(self.dtype)
         B, T, D = x.shape
-        pad = self.s_kernel // 2
-        x_padded = self.mp.pad(x, ((0,0),(pad,pad),(0,0)), mode='constant')
+        pad = self.s_kernel - 1
+        x_padded = self.mp.pad(x, ((0,0),(pad,0),(0,0)), mode='constant')
         out = self.mp.zeros_like(x)
         for i in range(self.s_kernel):
             out += x_padded[:, i:i+T, :] * self.weight[:, i]
@@ -44,7 +44,7 @@ class DepthwiseConv1D(Module):
     def backward(self, grad_out):
         x, x_padded = self._cache
         B, T, D = x.shape
-        pad = self.s_kernel // 2
+        pad = self.s_kernel - 1
         grad_x_padded = self.mp.zeros_like(x_padded)
         grad_weight = self.mp.zeros_like(self.weight)
         grad_bias = grad_out.sum(axis=(0, 1))

@@ -146,8 +146,8 @@ def cross_entropy_loss(mp, logits, targets):
     sum_exp_logits = mp.sum(exp_logits, axis=1, keepdims=True)
     probs = exp_logits / sum_exp_logits # Softmax probabilities
 
-    # Compute loss: - sum(target_one_hot * log(probs))
-    log_probs = mp.log(probs + 1e-7) # Add epsilon for numerical stability to avoid log(0)
+    # Compute stable log probabilities and mean loss over all target tokens.
+    log_probs = logits_flat - logits_max - mp.log(sum_exp_logits)
     loss = -mp.mean(log_probs[mp.arange(B * T), targets_flat])
 
     # Compute gradient of cross-entropy loss with respect to logits
@@ -155,7 +155,7 @@ def cross_entropy_loss(mp, logits, targets):
     one_hot_targets = mp.zeros_like(probs)
     one_hot_targets[mp.arange(B * T), targets_flat] = 1
 
-    grad_logits = probs - one_hot_targets # Shape: (B*T, C)
+    grad_logits = (probs - one_hot_targets) / (B * T) # Shape: (B*T, C)
     grad_logits = grad_logits.reshape(B, T, C) # Reshape back to (B, T, C)
 
     return loss, grad_logits

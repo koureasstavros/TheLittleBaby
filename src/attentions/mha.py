@@ -232,8 +232,9 @@ class MHA(Module):
         # Let S = Q @ K.T / sqrt(d_k)
         # dL/dQ = (dL/dS @ K) / sqrt(d_k)
         # dL/dK = (dL/dS.T @ Q) / sqrt(d_k)
-        grad_Q = self.mp.matmul(grad_scores, K) / mt.sqrt(self.d_k)
-        grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / mt.sqrt(self.d_k)
+        score_scale = mt.sqrt(self.d_k) * self.r_temp
+        grad_Q = self.mp.matmul(grad_scores, K) / score_scale
+        grad_K = self.mp.matmul(grad_scores.transpose(0, 1, 3, 2), Q) / score_scale
 
         # 10. Undo split_heads for Q, K, V to get gradients for original Q_orig, K_orig, V_orig
         grad_Q_orig = merge_heads(self, grad_Q)

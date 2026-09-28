@@ -346,23 +346,26 @@ class GPT(Module):
         if max_new_tokens is None:
             max_new_tokens = 500
             
-        # Process initial prompt (if any) without cache to establish context
-        if ctx.shape[1] > 0:
+        # Prefill the cache once and use the prompt's final logits for the first token.
+        cached_logits = None
+        if use_cache and ctx.shape[1] > 0:
             input_seq = ctx[:, -self.n_ctx:]
-            _ = self.forward(input_seq, use_cache)
+            cached_logits = self.forward(input_seq, True)[:, -1, :]
 
         for _ in range(max_new_tokens):
-            if use_cache and ctx.shape[1] > 1:
-                # For cached generation, only process the last token
-                input_seq = ctx[:, -1:]
+            if use_cache and cached_logits is not None:
+                logits = cached_logits
+                cached_logits = None
+            elif use_cache:
+                # Process only the newly sampled token; the cache contains its prefix.
+                logits = self.forward(ctx[:, -1:], True)[:, -1, :]
             else:
                 # Use the last self.n_ctx tokens as input (or all if shorter)
                 input_seq = ctx[:, -self.n_ctx:]
-
-            logits = self.forward(input_seq, use_cache)
+                logits = self.forward(input_seq, False)[:, -1, :]
 
             # Get logits for the last token in the sequence (the one to predict)
-            logits = logits[:, -1, :] # Shape: (1, vocab_size)
+            # Shape: (1, vocab_size)
 
             # Convert logits to probabilities
             probs = softmax(self.mp, logits, axis=-1).flatten() # Flatten to (vocab_size,)

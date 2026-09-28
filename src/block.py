@@ -167,10 +167,10 @@ class Block(Module):
 
                 grad_x = grad_x_from_res1 + grad_x_from_att
 
-                # Order: att, ln1, net, ln2
-                current_block_param_grads.extend(att_grads)
+                # Keep gradients aligned with parameters(): ln1, attention, ln2, network.
                 current_block_param_grads.extend(ln1_grads)
-                current_block_param_grads.extend(net_grads)
+                current_block_param_grads.extend(att_grads)
                 current_block_param_grads.extend(ln2_grads)
+                current_block_param_grads.extend(net_grads)
 
         return grad_x, current_block_param_grads

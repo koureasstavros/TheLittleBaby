@@ -119,14 +119,13 @@ class GLA(Module):
                 self.kv_cache = gated_v
             else:
                 # Append and keep only last kernel_size-1 + current tokens
-                self.kv_cache = self.mp.concat([self.kv_cache, gated_v], axis=1)
-                max_len = self.s_kernel - 1 + gated_v.shape[1]
-                if self.kv_cache.shape[1] > max_len:
-                    self.kv_cache = self.kv_cache[:, -max_len:, :]
+                self.kv_cache = self.mp.concatenate([self.kv_cache, gated_v], axis=1)
+            max_len = self.s_kernel - 1 + gated_v.shape[1]
+            if self.kv_cache.shape[1] > max_len:
+                self.kv_cache = self.kv_cache[:, -max_len:, :]
             # Always use the cache for context
             context = self.kv_cache
         else:
-            # Use current gated_v as context during training
             context = gated_v
 
         # 3. Normalize context
@@ -134,6 +133,9 @@ class GLA(Module):
 
         # 4. Depthwise convolution
         mixed_conv = self.depthwise_conv.forward(norm_context)
+        if use_cache and not self.setting:
+            # Cached context supplies history, but only current-token outputs are returned.
+            mixed_conv = mixed_conv[:, -gated_v.shape[1]:, :]
 
         # 5. Add nonlinearity
         mixed = relu(self.mp, mixed_conv)
@@ -183,8 +185,8 @@ class GLA(Module):
         grad_context, norm_grads = self.norm.backward(grad_norm_context)
 
         # 8. Backward through gating (elementwise multiply k_lin * v_lin)
-        grad_k_lin = grad_context * v_lin
-        grad_v_lin = grad_context * k_lin
+        grad_k_lin = grad_context * v_lin / self.r_temp
+        grad_v_lin = grad_context * k_lin / self.r_temp
 
         # 9. Backward through k_proj, v_proj 
         grad_x_v, v_proj_grads = self.v_proj.backward(grad_v_lin)
